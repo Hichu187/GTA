@@ -26,6 +26,7 @@ namespace Game.Gameplay.Vehicles.Motorcycle
         private MotorcycleInputAdapter   _inputAdapter;
         private MotorcycleCameraProvider _cameraProvider;
         private MotorcycleHUDProvider    _hudProvider;
+        private float                    _smoothedTargetLean;
 
         // IMotorcycleStats
         private float _speedKmh;
@@ -63,6 +64,11 @@ namespace Game.Gameplay.Vehicles.Motorcycle
             if (_frontWheelCollider) { _frontWheelCollider.steerAngle = 0f;  _frontWheelCollider.brakeTorque = 0f; }
             base.OnUnpossess(context);
             _rb.isKinematic = true;
+        }
+
+        protected override void OnOccupiedUpdate()
+        {
+            _cameraProvider.HandleLook(_inputAdapter.Command.Look);
         }
 
         protected override void OnOccupiedFixedUpdate()
@@ -158,13 +164,19 @@ namespace Game.Gameplay.Vehicles.Motorcycle
 
         private void ApplyLean(MotorcycleMoveCommand cmd, float speed, float steerFactor)
         {
-            // Lean angle is meaningful only when grounded
             bool isGrounded = (_frontWheelCollider != null && _frontWheelCollider.isGrounded)
                            || (_rearWheelCollider  != null && _rearWheelCollider.isGrounded);
 
-            float targetLean  = isGrounded
+            float desiredLean = isGrounded
                 ? -cmd.Steer * _config.MaxLeanAngle * steerFactor
-                : 0f;   // no lean in air
+                : 0f;
+
+            // Smooth the target so releasing the steer doesn't cause an instant large error.
+            _smoothedTargetLean = Mathf.MoveTowards(
+                _smoothedTargetLean, desiredLean,
+                _config.LeanReturnSpeed * Time.fixedDeltaTime);
+
+            float targetLean = _smoothedTargetLean;
 
             float currentLean = WrapAngle(transform.eulerAngles.z);
             float leanError   = targetLean - currentLean;

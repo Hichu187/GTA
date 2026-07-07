@@ -30,11 +30,13 @@ namespace Game.Gameplay.Vehicles.Motorcycle
 
         [Header("Lean")]
         [Tooltip("Maximum lean angle (degrees). Matches MaxSteerAngle visually.")]
-        public float MaxLeanAngle = 35f;
+        public float MaxLeanAngle    = 35f;
         [Tooltip("PD controller proportional gain — how aggressively bike leans.")]
-        public float LeanTorque   = 18f;
+        public float LeanTorque      = 18f;
         [Tooltip("PD controller derivative gain — damps lean oscillation.")]
-        public float LeanDamping  = 7f;
+        public float LeanDamping     = 10f;
+        [Tooltip("Speed (deg/s) at which target lean returns to upright when steering is released. Lower = smoother return.")]
+        public float LeanReturnSpeed = 120f;
 
         [Header("Aerodynamics")]
         [Tooltip("Air drag coefficient. linearDamping = speed * AirResistance + MinDamping.")]

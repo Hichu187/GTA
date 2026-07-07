@@ -221,8 +221,9 @@ namespace Game.Gameplay.Character
 
             var worldMove = camForward * _ctx.Command.MoveAxis.y
                           + camRight   * _ctx.Command.MoveAxis.x;
-            var motion    = worldMove * _ctx.MoveSpeed + Vector3.up * _ctx.VerticalVelocity;
-            _controller.Move(motion * Time.deltaTime);
+            var motion = worldMove * _ctx.MoveSpeed + Vector3.up * _ctx.VerticalVelocity;
+            if (_controller.enabled)
+                _controller.Move(motion * Time.deltaTime);
 
             // TP only: rotate body to face movement direction.
             // FP: body already tracks look direction via ConsumeFPBodyYawDelta above.

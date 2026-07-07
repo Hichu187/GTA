@@ -70,6 +70,11 @@ namespace Game.Gameplay.Vehicles.Airplane
             _rb.isKinematic = true;
         }
 
+        protected override void OnOccupiedUpdate()
+        {
+            _cameraProvider.HandleLook(_inputAdapter.Command.Look);
+        }
+
         protected override void OnOccupiedFixedUpdate()
         {
             var   cmd   = _inputAdapter.Command;

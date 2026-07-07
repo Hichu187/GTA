@@ -56,7 +56,9 @@ namespace Game.Gameplay.Vehicles.Car
         public override void OnPossess(PossessionContext context)
         {
             base.OnPossess(context);
-            _rb.isKinematic = false;
+            _rb.linearVelocity  = Vector3.zero;
+            _rb.angularVelocity = Vector3.zero;
+            _rb.isKinematic     = false;
         }
 
         public override void OnUnpossess(PossessionContext context)
@@ -65,6 +67,11 @@ namespace Game.Gameplay.Vehicles.Car
             base.OnUnpossess(context);
             _rb.isKinematic = true;
             _currentGear = GearState.Neutral;
+        }
+
+        protected override void OnOccupiedUpdate()
+        {
+            _cameraProvider.HandleLook(_inputAdapter.Command.Look);
         }
 
         protected override void OnOccupiedFixedUpdate()
