@@ -3,7 +3,8 @@
     "rootNamespace": "Game.Gameplay.Vehicles.Airplane",
     "references": [
         "Game.Gameplay.Vehicles.Common",
-        "Game.Core"
+        "Game.Core",
+        "Unity.TextMeshPro"
     ],
     "includePlatforms": [],
     "excludePlatforms": [],
