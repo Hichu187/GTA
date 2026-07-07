@@ -1,11 +1,8 @@
 {
-    "name": "Game.Gameplay.Character",
-    "rootNamespace": "Game.Gameplay.Character",
+    "name": "Game.Systems.Persistence",
+    "rootNamespace": "Game.Systems.Persistence",
     "references": [
-        "Game.Core",
-        "Game.Services",
-        "Unity.Cinemachine",
-        "Unity.InputSystem"
+        "Game.Core"
     ],
     "includePlatforms": [],
     "excludePlatforms": [],

@@ -6,6 +6,7 @@
         "Game.Systems.Input",
         "Game.Systems.Camera",
         "Game.Systems.HUD",
+        "Game.Systems.Persistence",
         "Unity.InputSystem"
     ],
     "includePlatforms": [],
