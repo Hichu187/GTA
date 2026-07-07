@@ -1,0 +1,17 @@
+{
+    "name": "Game.Gameplay.Vehicles.Motorcycle",
+    "rootNamespace": "Game.Gameplay.Vehicles.Motorcycle",
+    "references": [
+        "Game.Gameplay.Vehicles.Common",
+        "Game.Core"
+    ],
+    "includePlatforms": [],
+    "excludePlatforms": [],
+    "allowUnsafeCode": false,
+    "overrideReferences": false,
+    "precompiledReferences": [],
+    "autoReferenced": false,
+    "defineConstraints": [],
+    "versionDefines": [],
+    "noEngineReferences": false
+}

@@ -1,0 +1,17 @@
+{
+    "name": "Game.Systems.HUD",
+    "rootNamespace": "Game.Systems.HUD",
+    "references": [
+        "Game.Core",
+        "Unity.TextMeshPro"
+    ],
+    "includePlatforms": [],
+    "excludePlatforms": [],
+    "allowUnsafeCode": false,
+    "overrideReferences": false,
+    "precompiledReferences": [],
+    "autoReferenced": false,
+    "defineConstraints": [],
+    "versionDefines": [],
+    "noEngineReferences": false
+}

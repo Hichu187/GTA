@@ -1,0 +1,20 @@
+{
+    "name": "Game.Services",
+    "rootNamespace": "Game.Services",
+    "references": [
+        "Game.Core",
+        "Game.Systems.Input",
+        "Game.Systems.Camera",
+        "Game.Systems.HUD",
+        "Unity.InputSystem"
+    ],
+    "includePlatforms": [],
+    "excludePlatforms": [],
+    "allowUnsafeCode": false,
+    "overrideReferences": false,
+    "precompiledReferences": [],
+    "autoReferenced": false,
+    "defineConstraints": [],
+    "versionDefines": [],
+    "noEngineReferences": false
+}

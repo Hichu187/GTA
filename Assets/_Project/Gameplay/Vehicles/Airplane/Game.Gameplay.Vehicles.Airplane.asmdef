@@ -1,0 +1,17 @@
+{
+    "name": "Game.Gameplay.Vehicles.Airplane",
+    "rootNamespace": "Game.Gameplay.Vehicles.Airplane",
+    "references": [
+        "Game.Gameplay.Vehicles.Common",
+        "Game.Core"
+    ],
+    "includePlatforms": [],
+    "excludePlatforms": [],
+    "allowUnsafeCode": false,
+    "overrideReferences": false,
+    "precompiledReferences": [],
+    "autoReferenced": false,
+    "defineConstraints": [],
+    "versionDefines": [],
+    "noEngineReferences": false
+}
