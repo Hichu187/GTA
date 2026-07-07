@@ -10,10 +10,10 @@ namespace Game.Gameplay.Vehicles.Motorcycle
         public float MotorTorque  = 300f;
         [Tooltip("Brake torque on rear wheel (Nm). Front gets 50% of this.")]
         public float BrakeTorque  = 500f;
-        [Tooltip("Max forward speed (m/s). Motor torque tapers to 0 at this speed.")]
-        public float TopSpeed     = 30f;   // ≈ 108 km/h
-        [Tooltip("Max reverse speed (m/s). Reverse at 40% motor torque.")]
-        public float ReverseSpeed = 5f;
+        [Tooltip("Max forward speed (km/h). Motor torque tapers to 0 at this speed.")]
+        public float TopSpeedKmh  = 108f;
+        [Tooltip("Max reverse speed (km/h). Reverse at 40% motor torque.")]
+        public float ReverseSpeedKmh = 18f;
 
         [Header("Steering")]
         [Tooltip("Max front wheel steer angle at low speed (degrees).")]
@@ -40,9 +40,9 @@ namespace Game.Gameplay.Vehicles.Motorcycle
 
         [Header("Aerodynamics")]
         [Tooltip("Air drag coefficient. linearDamping = speed * AirResistance + MinDamping.")]
-        public float AirResistance = 0.07f;
+        public float AirResistance = 0.002f;
         [Tooltip("Minimum linearDamping always applied (simulates rolling resistance).")]
-        public float MinDamping    = 0.03f;
+        public float MinDamping    = 0.005f;
         [Tooltip("Angular damping that stabilizes yaw wobble at speed. Applied additively.")]
         public float AngularStability = 2f;
     }

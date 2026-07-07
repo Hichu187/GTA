@@ -1,0 +1,19 @@
+{
+    "name": "Game.Gameplay.Vehicles.Rocket",
+    "rootNamespace": "Game.Gameplay.Vehicles.Rocket",
+    "references": [
+        "Game.Gameplay.Vehicles.Common",
+        "Game.Core",
+        "Unity.TextMeshPro",
+        "Unity.Cinemachine"
+    ],
+    "includePlatforms": [],
+    "excludePlatforms": [],
+    "allowUnsafeCode": false,
+    "overrideReferences": false,
+    "precompiledReferences": [],
+    "autoReferenced": false,
+    "defineConstraints": [],
+    "versionDefines": [],
+    "noEngineReferences": false
+}

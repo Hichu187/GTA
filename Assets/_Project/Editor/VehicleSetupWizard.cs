@@ -8,6 +8,9 @@ using Game.Gameplay.Vehicles.Common;
 using Game.Gameplay.Vehicles.Motorcycle;
 using Game.Gameplay.Vehicles.Car;
 using Game.Gameplay.Vehicles.Airplane;
+using Game.Gameplay.Vehicles.Helicopter;
+using Game.Gameplay.Vehicles.Glider;
+using Game.Gameplay.Vehicles.Rocket;
 using Game.Gameplay.Interactables;
 
 namespace Game.Editor
@@ -188,11 +191,11 @@ namespace Game.Editor
 
             // Landing gear — 3-point: nose + 2 main
             var gearNose  = CreateWheelCollider(go.transform, "GearNose",
-                                new Vector3( 0f, -0.5f,  2.5f), 0.30f, 0.3f);
+                                new Vector3( 0f, -0.5f,  2.5f), 0.30f, 0.3f, fwdStiffness: 1f);
             var gearLeft  = CreateWheelCollider(go.transform, "GearLeft",
-                                new Vector3(-2f, -0.5f, -1.0f), 0.35f, 0.3f);
+                                new Vector3(-2f, -0.5f, -1.0f), 0.35f, 0.3f, fwdStiffness: 1f);
             var gearRight = CreateWheelCollider(go.transform, "GearRight",
-                                new Vector3( 2f, -0.5f, -1.0f), 0.35f, 0.3f);
+                                new Vector3( 2f, -0.5f, -1.0f), 0.35f, 0.3f, fwdStiffness: 1f);
 
             var meshNose  = CreateChild(go.transform, "GearNoseMesh",  new Vector3( 0f, -0.5f,  2.5f));
             var meshLeft  = CreateChild(go.transform, "GearLeftMesh",  new Vector3(-2f, -0.5f, -1.0f));
@@ -242,6 +245,210 @@ namespace Game.Editor
         }
 
         // ════════════════════════════════════════════════════════════════════════
+        // HELICOPTER   Game / Vehicle Setup / Helicopter
+        // ════════════════════════════════════════════════════════════════════════
+
+        [MenuItem("Game/Vehicle Setup/Helicopter")]
+        public static void SetupHelicopter()
+        {
+            var go = FindOrCreateVehicleGO<HelicopterController>("Helicopter");
+            go.transform.position = new Vector3(10f, 0.5f, 10f);
+
+            EnsureComponent<HelicopterInputAdapter>(go);
+            EnsureComponent<HelicopterCameraProvider>(go);
+            EnsureComponent<HelicopterHUDProvider>(go);
+            EnsureComponent<HelicopterController>(go);
+
+            var rb = go.GetComponent<Rigidbody>();
+            if (rb) { rb.mass = 1500f; rb.linearDamping = 0.05f; rb.angularDamping = 1.0f; rb.useGravity = false; }
+
+            if (!go.GetComponent<BoxCollider>())
+            {
+                var col    = go.AddComponent<BoxCollider>();
+                col.size   = new Vector3(2.5f, 1.5f, 6f);
+                col.center = new Vector3(0f, 0.5f, 0f);
+            }
+
+            // Visual hierarchy: RollRoot → MeshRoot (for tilt)
+            var rollRoot = CreateChild(go.transform, "RollRoot", Vector3.zero);
+            var meshRoot = CreateChild(rollRoot.transform, "MeshRoot", Vector3.zero);
+
+            // Rotor placeholders
+            var mainRotor = CreateChild(go.transform, "MainRotor", new Vector3(0f,  2f,  0f));
+            var tailRotor = CreateChild(go.transform, "TailRotor", new Vector3(0f,  1f, -3f));
+
+            var enterAnchor = CreateChild(go.transform, "EnterAnchor", new Vector3( 0f, 0.5f, 0f));
+            var exitAnchor  = CreateChild(go.transform, "ExitAnchor",  new Vector3( 2f, 0f,   0f));
+
+            var vcam = FindOrCreateVehicleVCam("Helicopter_Vcam", go.transform,
+                           new Vector3(0f, 5f, -15f));
+
+            const string hudFolder = "Assets/_Project/Gameplay/Vehicles/Helicopter/HUD/Prefabs";
+            EnsureFolderExists(hudFolder);
+            var speedoPrefab   = CreateTMProPrefab<HelicopterSpeedoModule>(hudFolder,    "HeliSpeedo");
+            var altitudePrefab = CreateTMProPrefab<HelicopterAltitudeModule>(hudFolder,  "HeliAltitude");
+            var vertSpeedPrefab = CreateTMProPrefab<HelicopterVertSpeedModule>(hudFolder, "HeliVertSpeed");
+
+            var ctrl = go.GetComponent<HelicopterController>();
+            SetField(ctrl, "_enterAnchor", enterAnchor.transform);
+            SetField(ctrl, "_exitAnchor",  exitAnchor.transform);
+            SetField(ctrl, "_meshRoot",    meshRoot.transform);
+            SetField(ctrl, "_rollRoot",    rollRoot.transform);
+            SetField(ctrl, "_mainRotor",   mainRotor.transform);
+            SetField(ctrl, "_tailRotor",   tailRotor.transform);
+
+            SetField(go.GetComponent<HelicopterCameraProvider>(), "_vcamGameObject",     vcam);
+            SetField(go.GetComponent<HelicopterHUDProvider>(),    "_speedoPrefab",       speedoPrefab);
+            SetField(go.GetComponent<HelicopterHUDProvider>(),    "_altitudePrefab",     altitudePrefab);
+            SetField(go.GetComponent<HelicopterHUDProvider>(),    "_verticalSpeedPrefab", vertSpeedPrefab);
+
+            var interactable = EnsureComponent<EnterVehicleInteractable>(go);
+            SetField(interactable, "_vehicle", ctrl);
+
+            Finish("Helicopter",
+                "Replace RollRoot/MeshRoot with your real fuselage mesh. " +
+                "Assign real rotor meshes to MainRotor / TailRotor. " +
+                "Press Space in-game to TakeOff; press Space again near ground to Land. " +
+                "Place vehicle on Interactable layer.");
+        }
+
+        // ════════════════════════════════════════════════════════════════════════
+        // GLIDER       Game / Vehicle Setup / Glider
+        // ════════════════════════════════════════════════════════════════════════
+
+        [MenuItem("Game/Vehicle Setup/Glider")]
+        public static void SetupGlider()
+        {
+            var go = FindOrCreateVehicleGO<GliderController>("Glider");
+            go.transform.position = new Vector3(0f, 60f, 0f);  // spawn high in the air
+
+            EnsureComponent<GliderInputAdapter>(go);
+            EnsureComponent<GliderCameraProvider>(go);
+            EnsureComponent<GliderHUDProvider>(go);
+            EnsureComponent<GliderController>(go);
+
+            var rb = go.GetComponent<Rigidbody>();
+            if (rb) { rb.mass = 250f; rb.linearDamping = 0.02f; rb.angularDamping = 0.5f; rb.useGravity = false; }
+
+            if (!go.GetComponent<BoxCollider>())
+            {
+                var col    = go.AddComponent<BoxCollider>();
+                col.size   = new Vector3(10f, 0.8f, 5f);   // wide wingspan
+                col.center = Vector3.zero;
+            }
+
+            // Visual hierarchy
+            var rollRoot = CreateChild(go.transform, "RollRoot", Vector3.zero);
+            var meshRoot = CreateChild(rollRoot.transform, "MeshRoot", Vector3.zero);
+
+            var enterAnchor = CreateChild(go.transform, "EnterAnchor", new Vector3(0f,  0.2f, 0f));
+            var exitAnchor  = CreateChild(go.transform, "ExitAnchor",  new Vector3(0f, -1f,   0f));
+
+            var vcam = FindOrCreateVehicleVCam("Glider_Vcam", go.transform,
+                           new Vector3(0f, 3f, -12f));
+
+            const string hudFolder = "Assets/_Project/Gameplay/Vehicles/Glider/HUD/Prefabs";
+            EnsureFolderExists(hudFolder);
+            var speedoPrefab    = CreateTMProPrefab<GliderSpeedoModule>(hudFolder,   "GliderSpeedo");
+            var altitudePrefab  = CreateTMProPrefab<GliderAltitudeModule>(hudFolder, "GliderAltitude");
+            var vertSpeedPrefab = CreateTMProPrefab<GliderVertSpeedModule>(hudFolder, "GliderVertSpeed");
+
+            var ctrl = go.GetComponent<GliderController>();
+            SetField(ctrl, "_enterAnchor", enterAnchor.transform);
+            SetField(ctrl, "_exitAnchor",  exitAnchor.transform);
+            SetField(ctrl, "_meshRoot",    meshRoot.transform);
+            SetField(ctrl, "_rollRoot",    rollRoot.transform);
+
+            SetField(go.GetComponent<GliderCameraProvider>(), "_vcamGameObject",      vcam);
+            SetField(go.GetComponent<GliderHUDProvider>(),    "_speedoPrefab",        speedoPrefab);
+            SetField(go.GetComponent<GliderHUDProvider>(),    "_altitudePrefab",      altitudePrefab);
+            SetField(go.GetComponent<GliderHUDProvider>(),    "_verticalSpeedPrefab", vertSpeedPrefab);
+
+            var interactable = EnsureComponent<EnterVehicleInteractable>(go);
+            SetField(interactable, "_vehicle", ctrl);
+
+            Finish("Glider",
+                "Glider spawns at Y=60 (in-air). Possess it with E while Character is nearby. " +
+                "Replace RollRoot/MeshRoot with real glider mesh. " +
+                "UpArrow/DownArrow = Pitch; LeftArrow/RightArrow = Roll; LShift = Brake. " +
+                "Auto-lands when touching ground. Place GO on Interactable layer.");
+        }
+
+        // ════════════════════════════════════════════════════════════════════════
+        // ROCKET       Game / Vehicle Setup / Rocket
+        // ════════════════════════════════════════════════════════════════════════
+
+        [MenuItem("Game/Vehicle Setup/Rocket")]
+        public static void SetupRocket()
+        {
+            var go = FindOrCreateVehicleGO<RocketController>("Rocket");
+            go.transform.position = new Vector3(0f, 50f, 0f);  // spawn in the air
+
+            EnsureComponent<RocketInputAdapter>(go);
+            EnsureComponent<RocketCameraProvider>(go);
+            EnsureComponent<RocketHUDProvider>(go);
+            EnsureComponent<RocketController>(go);
+
+            var rb = go.GetComponent<Rigidbody>();
+            if (rb) { rb.mass = 500f; rb.linearDamping = 0f; rb.angularDamping = 0.5f; rb.useGravity = false; }
+
+            if (!go.GetComponent<BoxCollider>())
+            {
+                var col    = go.AddComponent<BoxCollider>();
+                col.size   = new Vector3(0.8f, 0.8f, 4f);   // slim rocket body
+                col.center = Vector3.zero;
+            }
+
+            // Visual hierarchy
+            var rollRoot = CreateChild(go.transform, "RollRoot", Vector3.zero);
+            var meshRoot = CreateChild(rollRoot.transform, "MeshRoot", Vector3.zero);
+
+            // Exhaust particle placeholder
+            var exhaustGO = CreateChild(go.transform, "Exhaust", new Vector3(0f, 0f, -2f));
+            var ps = exhaustGO.AddComponent<ParticleSystem>();
+            var main = ps.main;
+            main.startSpeed    = 5f;
+            main.startLifetime = 0.5f;
+            main.startColor    = new Color(1f, 0.4f, 0f);
+            var emission = ps.emission;
+            emission.rateOverTime = 0f;   // RocketController drives this
+
+            var enterAnchor = CreateChild(go.transform, "EnterAnchor", new Vector3(0f, 0f,  0f));
+            var exitAnchor  = CreateChild(go.transform, "ExitAnchor",  new Vector3(1f, 0f, -1f));
+
+            var vcam = FindOrCreateVehicleVCam("Rocket_Vcam", go.transform,
+                           new Vector3(0f, 2f, -12f));
+
+            const string hudFolder = "Assets/_Project/Gameplay/Vehicles/Rocket/HUD/Prefabs";
+            EnsureFolderExists(hudFolder);
+            var speedoPrefab   = CreateTMProPrefab<RocketSpeedoModule>(hudFolder,   "RocketSpeedo");
+            var altitudePrefab = CreateTMProPrefab<RocketAltitudeModule>(hudFolder, "RocketAltitude");
+            var throttlePrefab = CreateTMProPrefab<RocketThrottleModule>(hudFolder, "RocketThrottle");
+
+            var ctrl = go.GetComponent<RocketController>();
+            SetField(ctrl, "_enterAnchor",       enterAnchor.transform);
+            SetField(ctrl, "_exitAnchor",        exitAnchor.transform);
+            SetField(ctrl, "_meshRoot",          meshRoot.transform);
+            SetField(ctrl, "_rollRoot",          rollRoot.transform);
+            SetField(ctrl, "_exhaustParticles",  ps);
+            SetField(ctrl, "_exhaustTransform",  exhaustGO.transform);
+
+            SetField(go.GetComponent<RocketCameraProvider>(), "_vcamGameObject",  vcam);
+            SetField(go.GetComponent<RocketHUDProvider>(),    "_speedoPrefab",    speedoPrefab);
+            SetField(go.GetComponent<RocketHUDProvider>(),    "_altitudePrefab",  altitudePrefab);
+            SetField(go.GetComponent<RocketHUDProvider>(),    "_throttlePrefab",  throttlePrefab);
+
+            var interactable = EnsureComponent<EnterVehicleInteractable>(go);
+            SetField(interactable, "_vehicle", ctrl);
+
+            Finish("Rocket",
+                "Rocket spawns at Y=50 (in-air). Possess with E while Character is nearby. " +
+                "W = Throttle; Arrow keys = Pitch/Roll; F = Exit. " +
+                "Replace Exhaust ParticleSystem with a proper VFX. " +
+                "Replace RollRoot/MeshRoot with real rocket mesh. Place GO on Interactable layer.");
+        }
+
+        // ════════════════════════════════════════════════════════════════════════
         // SHARED HELPERS
         // ════════════════════════════════════════════════════════════════════════
 
@@ -263,7 +470,8 @@ namespace Game.Editor
             => go.GetComponent<T>() ?? go.AddComponent<T>();
 
         static GameObject CreateWheelCollider(Transform parent, string name,
-                                              Vector3 localPos, float radius, float suspDist)
+                                              Vector3 localPos, float radius, float suspDist,
+                                              float fwdStiffness = 2f)
         {
             var existing = parent.Find(name);
             if (existing != null) return existing.gameObject;
@@ -282,6 +490,15 @@ namespace Game.Editor
             spring.damper         = 4500f;
             spring.targetPosition = 0.5f;
             wc.suspensionSpring   = spring;
+
+            // Higher stiffness prevents forward spin and lateral slide at speed.
+            var fwd = wc.forwardFriction;
+            fwd.stiffness      = fwdStiffness;
+            wc.forwardFriction = fwd;
+
+            var side = wc.sidewaysFriction;
+            side.stiffness      = fwdStiffness;
+            wc.sidewaysFriction = side;
 
             return go;
         }

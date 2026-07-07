@@ -110,7 +110,7 @@ namespace Game.Gameplay.Vehicles.Motorcycle
             // ── HUD stats ─────────────────────────────────────────────────────
             _speedKmh = speedFwd * 3.6f;
             _rpm      = Mathf.Lerp(800f, 8000f,
-                            Mathf.Clamp01(Mathf.Abs(speedFwd) / _config.TopSpeed));
+                            Mathf.Clamp01(Mathf.Abs(speedFwd) / (_config.TopSpeedKmh / 3.6f)));
 
             // ── Exit ─────────────────────────────────────────────────────────
             if (_inputAdapter.ConsumeExitPressed())
@@ -124,8 +124,9 @@ namespace Game.Gameplay.Vehicles.Motorcycle
             if (cmd.Throttle > 0.01f)
             {
                 // Forward — taper motor torque near top speed so it doesn't overshoot
-                float speedRatio = Mathf.Clamp01(speedFwd / _config.TopSpeed);
-                _rearWheelCollider.motorTorque  = cmd.Throttle * _config.MotorTorque * (1f - speedRatio);
+                float speedRatio  = Mathf.Clamp01(speedFwd / (_config.TopSpeedKmh / 3.6f));
+                float tapered     = cmd.Throttle * _config.MotorTorque * (1f - speedRatio);
+                _rearWheelCollider.motorTorque  = tapered > 5f ? tapered : 0f;
                 _rearWheelCollider.brakeTorque  = 0f;
                 if (_frontWheelCollider) _frontWheelCollider.brakeTorque = 0f;
             }
@@ -139,7 +140,7 @@ namespace Game.Gameplay.Vehicles.Motorcycle
                     if (_frontWheelCollider)
                         _frontWheelCollider.brakeTorque = cmd.Brake * _config.BrakeTorque * 0.5f;
                 }
-                else if (speedFwd > -_config.ReverseSpeed)
+                else if (speedFwd > -(_config.ReverseSpeedKmh / 3.6f))
                 {
                     // Slow/stopped → reverse (40% of motor torque, negative)
                     _rearWheelCollider.brakeTorque  = 0f;

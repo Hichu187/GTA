@@ -11,6 +11,9 @@
         "Game.Gameplay.Vehicles.Motorcycle",
         "Game.Gameplay.Vehicles.Car",
         "Game.Gameplay.Vehicles.Airplane",
+        "Game.Gameplay.Vehicles.Helicopter",
+        "Game.Gameplay.Vehicles.Glider",
+        "Game.Gameplay.Vehicles.Rocket",
         "Game.Gameplay.Interactables"
     ],
     "includePlatforms": ["Editor"],

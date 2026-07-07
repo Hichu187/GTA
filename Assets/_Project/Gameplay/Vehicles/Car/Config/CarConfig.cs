@@ -10,10 +10,10 @@ namespace Game.Gameplay.Vehicles.Car
         public float MotorTorque    = 1500f;
         [Tooltip("Brake torque per wheel (Nm). Rear gets 60%, front 40%.")]
         public float BrakeTorque    = 2000f;
-        [Tooltip("Max forward speed (m/s). Motor tapers to 0 at this speed.")]
-        public float TopSpeed       = 50f;   // ≈ 180 km/h
-        [Tooltip("Max reverse speed (m/s).")]
-        public float ReverseSpeed   = 12f;
+        [Tooltip("Max forward speed (km/h). Motor tapers to 0 at this speed.")]
+        public float TopSpeedKmh    = 180f;
+        [Tooltip("Max reverse speed (km/h).")]
+        public float ReverseSpeedKmh = 43f;
         [Tooltip("Which axle receives motor torque.")]
         public DriveType Drive      = DriveType.RearWheelDrive;
 
@@ -33,9 +33,9 @@ namespace Game.Gameplay.Vehicles.Car
         [Header("Stability")]
         [Tooltip("Anti-roll bar force (N). Prevents body from rolling over in corners.")]
         public float AntiRollForce  = 8000f;
-        [Tooltip("Air drag: linearDamping = speed * AirResistance + MinDamping.")]
-        public float AirResistance  = 0.04f;
-        public float MinDamping     = 0.01f;
+        [Tooltip("Air drag coefficient. linearDamping = speed * AirResistance + MinDamping.")]
+        public float AirResistance  = 0.001f;
+        public float MinDamping     = 0.005f;
     }
 
     public enum DriveType { FrontWheelDrive, RearWheelDrive, AllWheelDrive }

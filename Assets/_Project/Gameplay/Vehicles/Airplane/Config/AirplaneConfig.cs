@@ -1,43 +1,39 @@
 using UnityEngine;
+using Game.Gameplay.Vehicles.Common;
 
 namespace Game.Gameplay.Vehicles.Airplane
 {
     [System.Serializable]
-    public class AirplaneConfig
+    public class AirplaneConfig : FlyingVehicleConfig
     {
-        [Header("Engine")]
-        [Tooltip("Maximum engine thrust (N). ~40000 for a small aircraft, ~80000 for a jet.")]
-        public float MaxThrust      = 60000f;
-        [Tooltip("How fast throttle response builds up (0=instant, lerp factor).")]
-        [Range(0.01f, 0.3f)]
-        public float ThrottleSmooth = 0.05f;
-        [Tooltip("Max forward speed (m/s). Engine thrust tapers off near this.")]
-        public float TopSpeed       = 120f;   // ≈ 432 km/h
+        [Header("Airplane — Control Surfaces")]
+        [Tooltip("Pitch angle change rate (deg/s) at full stick input.")]
+        public float PitchSpeed    = 60f;
+        [Tooltip("Roll angle change rate (deg/s) at full stick input.")]
+        public float RollSpeed     = 75f;
+        [Tooltip("Direct yaw rotation speed (deg/s) in air — supplements roll-driven turning.")]
+        public float YawSpeed      = 20f;
 
-        [Header("Aerodynamics")]
-        [Tooltip("Lift per (m/s)². Lift = speed² × LiftCoefficient × angle-of-attack. Tune so plane lifts off at StallSpeed.")]
-        public float LiftCoefficient  = 0.025f;
-        [Tooltip("Speed below which wings produce no useful lift (m/s).")]
-        public float StallSpeed       = 25f;
-        [Tooltip("Air drag: linearDamping = speed × AirResistance. Limits top speed passively.")]
-        public float AirResistance    = 0.015f;
-        [Tooltip("Landing brake drag multiplier — applied to linearDamping when Brake held on ground.")]
-        public float BrakeDrag        = 0.5f;
+        [Header("Airplane — Landing")]
+        [Tooltip("Raycast height (m) below which holding Brake triggers auto-land.")]
+        public float LandingHeight = 3.5f;
+        [Tooltip("Deceleration multiplier when landed and braking.")]
+        public float BrakeFriction = 2.5f;
 
-        [Header("Control Surfaces")]
-        [Tooltip("Pitch torque (Nm/unit input). Controls nose up/down.")]
-        public float PitchTorque      = 12f;
-        [Tooltip("Roll torque (Nm/unit input). Controls banking left/right.")]
-        public float RollTorque       = 8f;
-        [Tooltip("Yaw torque (Nm/unit input). Controls rudder left/right.")]
-        public float YawTorque        = 4f;
-        [Tooltip("Angular damping applied always — resists unintended rotation.")]
-        public float AngularDamping   = 3f;
-        [Tooltip("Multiplies control effectiveness below stall speed (0 = no control when slow).")]
-        public AnimationCurve ControlEffectiveness = new AnimationCurve(
-            new Keyframe(0f,   0.0f),
-            new Keyframe(15f,  0.3f),
-            new Keyframe(30f,  1.0f),
-            new Keyframe(120f, 1.0f));
+        public AirplaneConfig()
+        {
+            TakeoffSpeedKmh    = 90f;     // 25 m/s
+            GroundAcceleration = 20f;
+            GroundTopSpeedKmh  = 126f;    // 35 m/s
+            NormalFlySpeedKmh  = 216f;    // 60 m/s
+            MaxFlySpeedKmh     = 324f;    // 90 m/s
+            FlyAcceleration    = 12f;
+            FlyDeceleration    = 8f;
+            TurningSpeed       = 28f;
+            MaxPitchAngle      = 35f;
+            MaxRollAngle       = 50f;
+            PitchSmooth        = 3f;
+            RollSmooth         = 2f;
+        }
     }
 }

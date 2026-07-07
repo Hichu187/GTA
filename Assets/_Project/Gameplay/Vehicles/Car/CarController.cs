@@ -26,9 +26,10 @@ namespace Game.Gameplay.Vehicles.Car
         [SerializeField] private Transform _meshRL;
         [SerializeField] private Transform _meshRR;
 
-        private CarInputAdapter  _inputAdapter;
+        private CarInputAdapter   _inputAdapter;
         private CarCameraProvider _cameraProvider;
-        private CarHUDProvider   _hudProvider;
+        private CarHUDProvider    _hudProvider;
+        private int               _settleFrames;
 
         // ICarStats
         private float     _speedKmh;
@@ -59,6 +60,7 @@ namespace Game.Gameplay.Vehicles.Car
             _rb.linearVelocity  = Vector3.zero;
             _rb.angularVelocity = Vector3.zero;
             _rb.isKinematic     = false;
+            _settleFrames       = 4;
         }
 
         public override void OnUnpossess(PossessionContext context)
@@ -97,8 +99,14 @@ namespace Game.Gameplay.Vehicles.Car
             _rb.linearDamping = speed * _config.AirResistance + _config.MinDamping;
 
             // ── Anti-roll bars ────────────────────────────────────────────────
-            if (_wheelFL && _wheelFR) ApplyAntiRoll(_wheelFL, _wheelFR);
-            if (_wheelRL && _wheelRR) ApplyAntiRoll(_wheelRL, _wheelRR);
+            // Skip first few frames so WheelColliders can settle after isKinematic→false.
+            if (_settleFrames > 0)
+                _settleFrames--;
+            else
+            {
+                if (_wheelFL && _wheelFR) ApplyAntiRoll(_wheelFL, _wheelFR);
+                if (_wheelRL && _wheelRR) ApplyAntiRoll(_wheelRL, _wheelRR);
+            }
 
             // ── Wheel mesh sync ───────────────────────────────────────────────
             SyncWheelMesh(_wheelFL, _meshFL);
@@ -133,12 +141,13 @@ namespace Game.Gameplay.Vehicles.Car
             if (cmd.Throttle > 0.01f && _currentGear == GearState.Drive)
             {
                 // Taper torque near top speed
-                float speedRatio = Mathf.Clamp01(speedFwd / _config.TopSpeed);
-                motorTorque = cmd.Throttle * _config.MotorTorque * (1f - speedRatio);
+                float speedRatio = Mathf.Clamp01(speedFwd / (_config.TopSpeedKmh / 3.6f));
+                float tapered   = cmd.Throttle * _config.MotorTorque * (1f - speedRatio);
+                motorTorque = tapered > 10f ? tapered : 0f;  // dead zone — avoids micro-torque oscillation
             }
             else if (cmd.Brake > 0.01f)
             {
-                if (_currentGear == GearState.Reverse && speedFwd > -_config.ReverseSpeed)
+                if (_currentGear == GearState.Reverse && speedFwd > -(_config.ReverseSpeedKmh / 3.6f))
                 {
                     // Reverse gear: negative torque on driven wheels
                     motorTorque = -cmd.Brake * _config.MotorTorque * 0.5f;

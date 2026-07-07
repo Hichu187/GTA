@@ -10,36 +10,31 @@ namespace Game.Gameplay.Vehicles.Airplane
     [RequireComponent(typeof(AirplaneInputAdapter))]
     [RequireComponent(typeof(AirplaneCameraProvider))]
     [RequireComponent(typeof(AirplaneHUDProvider))]
-    public class AirplaneController : VehicleControllerBase, IAirplaneStats
+    public class AirplaneController : FlyingVehicleBase, IAirplaneStats
     {
         [SerializeField] private AirplaneConfig _config = new AirplaneConfig();
 
-        [Header("Landing Gear (optional)")]
-        [Tooltip("WheelColliders on the landing gear — used for taxi/takeoff ground physics.")]
+        [Header("Landing Gear")]
         [SerializeField] private WheelCollider[] _landingGearWheels;
         [SerializeField] private Transform[]     _landingGearMeshes;
 
         [Header("Propeller (optional visual)")]
         [SerializeField] private Transform _propeller;
-        [SerializeField] private float     _propellerSpinSpeed = 3000f;  // deg/s at full throttle
+        [SerializeField] private float     _propellerSpinSpeed = 3000f;
 
-        private AirplaneInputAdapter  _inputAdapter;
+        private AirplaneInputAdapter   _inputAdapter;
         private AirplaneCameraProvider _cameraProvider;
-        private AirplaneHUDProvider   _hudProvider;
+        private AirplaneHUDProvider    _hudProvider;
 
-        // Throttle smoothing
-        private float _currentThrottle;
+        private float _groundSpeed;
+        private float _targetPitch;
+        private float _targetRoll;
 
         // IAirplaneStats
-        private float _speedKmh;
-        private float _altitudeM;
-        private float _headingDeg;
-        private float _throttlePct;
-
-        public float SpeedKmh    => _speedKmh;
-        public float AltitudeM   => _altitudeM;
-        public float HeadingDeg  => _headingDeg;
-        public float ThrottlePct => _throttlePct;
+        public float SpeedKmh    => _currentSpeed * 3.6f;
+        public float AltitudeM   => transform.position.y;
+        public float HeadingDeg  => (transform.eulerAngles.y + 360f) % 360f;
+        public float ThrottlePct => _inputAdapter != null ? _inputAdapter.Command.Throttle * 100f : 0f;
 
         // IPossessable
         public override ICameraContextProvider  CameraProvider => _cameraProvider;
@@ -53,7 +48,6 @@ namespace Game.Gameplay.Vehicles.Airplane
             _cameraProvider = GetComponent<AirplaneCameraProvider>();
             _hudProvider    = GetComponent<AirplaneHUDProvider>();
             _hudProvider.StatsSource = this;
-
             _rb.isKinematic = true;
         }
 
@@ -61,103 +55,151 @@ namespace Game.Gameplay.Vehicles.Airplane
         {
             base.OnPossess(context);
             _rb.isKinematic = false;
+            _rb.useGravity  = true;
+            _groundSpeed    = 0f;
+            _targetPitch    = 0f;
+            _targetRoll     = 0f;
         }
 
         public override void OnUnpossess(PossessionContext context)
         {
-            _currentThrottle = 0f;
+            ResetLandingGear();
             base.OnUnpossess(context);
             _rb.isKinematic = true;
         }
 
-        protected override void OnOccupiedUpdate()
+        // ── Ground ──────────────────────────────────────────────────────────
+
+        protected override void OnGroundUpdate()
         {
             _cameraProvider.HandleLook(_inputAdapter.Command.Look);
+            if (_inputAdapter.ConsumeExitPressed()) _onExitRequested?.Invoke();
         }
 
-        protected override void OnOccupiedFixedUpdate()
+        protected override void OnGroundFixedUpdate()
         {
-            var   cmd   = _inputAdapter.Command;
-            float dt    = Time.fixedDeltaTime;
-            float speed = _rb.linearVelocity.magnitude;
+            var cmd = _inputAdapter.Command;
 
-            // Control surface effectiveness scales with airspeed
-            float effectiveness = _config.ControlEffectiveness.Evaluate(speed);
+            // Throttle → accelerate; Brake → decelerate faster; coast → slow roll
+            if (cmd.Throttle > 0.01f)
+                _groundSpeed = Mathf.MoveTowards(_groundSpeed, _config.GroundTopSpeedKmh / 3.6f,
+                    _config.GroundAcceleration * Time.fixedDeltaTime);
+            else if (cmd.Brake)
+                _groundSpeed = Mathf.MoveTowards(_groundSpeed, 0f,
+                    _config.GroundAcceleration * _config.BrakeFriction * Time.fixedDeltaTime);
+            else
+                _groundSpeed = Mathf.MoveTowards(_groundSpeed, 0f,
+                    _config.GroundAcceleration * 0.4f * Time.fixedDeltaTime);
 
-            // ── Throttle (smoothed) ───────────────────────────────────────────
-            _currentThrottle = Mathf.Lerp(_currentThrottle, cmd.Throttle, _config.ThrottleSmooth);
+            // Ground steering
+            if (Mathf.Abs(cmd.Yaw) > 0.01f)
+                transform.Rotate(Vector3.up, cmd.Yaw * 40f * Time.fixedDeltaTime, Space.World);
 
-            // ── Thrust ────────────────────────────────────────────────────────
-            float speedRatio = Mathf.Clamp01(speed / _config.TopSpeed);
-            float thrust     = _currentThrottle * _config.MaxThrust * (1f - speedRatio * speedRatio);
-            _rb.AddForce(transform.forward * thrust, ForceMode.Force);
+            // Drive wheels via velocity (WheelColliders still provide ground contact)
+            _rb.linearVelocity = new Vector3(
+                transform.forward.x * _groundSpeed,
+                _rb.linearVelocity.y,
+                transform.forward.z * _groundSpeed);
 
-            // ── Lift (wings — requires minimum airspeed) ──────────────────────
-            float speedFwd  = Vector3.Dot(_rb.linearVelocity, transform.forward);
-            if (speedFwd > _config.StallSpeed)
+            SyncLandingGear();
+            SpinPropeller(cmd.Throttle);
+
+            // Auto-takeoff
+            if (_groundSpeed >= _config.TakeoffSpeedKmh / 3.6f)
             {
-                // Lift = v² × coefficient, acts in local up direction
-                float liftForce = speedFwd * speedFwd * _config.LiftCoefficient;
-                _rb.AddForce(transform.up * liftForce, ForceMode.Force);
+                _currentSpeed = _groundSpeed;
+                BeginFlight();
             }
+        }
 
-            // ── Air drag (speed-proportional linearDamping) ───────────────────
-            float drag = speed * _config.AirResistance;
-            if (cmd.Brake && IsOnGround())
-                drag += _config.BrakeDrag;
-            _rb.linearDamping = drag;
+        // ── Air ─────────────────────────────────────────────────────────────
 
-            // ── Control surfaces (pitch / roll / yaw) ─────────────────────────
-            // Pitch: positive input = nose down (pull back = nose up = negative pitch)
-            _rb.AddRelativeTorque(
-                new Vector3(-cmd.Pitch * _config.PitchTorque * effectiveness,
-                             cmd.Yaw   * _config.YawTorque   * effectiveness,
-                            -cmd.Roll  * _config.RollTorque  * effectiveness),
-                ForceMode.Acceleration);
+        protected override void OnAirUpdate()
+        {
+            _cameraProvider.HandleLook(_inputAdapter.Command.Look);
+            if (_inputAdapter.ConsumeExitPressed()) _onExitRequested?.Invoke();
+        }
 
-            // Angular damping: resists unwanted drift and stabilises flight
-            _rb.angularDamping = _config.AngularDamping;
+        protected override void OnAirFixedUpdate()
+        {
+            var   cmd = _inputAdapter.Command;
+            float dt  = Time.fixedDeltaTime;
 
-            // ── Landing gear sync ─────────────────────────────────────────────
-            if (_landingGearWheels != null)
+            // ── Speed ────────────────────────────────────────────────────────
+            if (cmd.Throttle > 0.01f)
             {
-                for (int i = 0; i < _landingGearWheels.Length; i++)
+                float target = Mathf.Lerp(_config.NormalFlySpeedKmh, _config.MaxFlySpeedKmh, cmd.Throttle) / 3.6f;
+                _currentSpeed = Mathf.MoveTowards(_currentSpeed, target, _config.FlyAcceleration * dt);
+            }
+            else
+                _currentSpeed = Mathf.MoveTowards(_currentSpeed, 0f, _config.FlyDeceleration * dt);
+
+            // ── Pitch / Roll (accumulate visual angles) ───────────────────────
+            _targetPitch += cmd.Pitch * _config.PitchSpeed * dt;
+            _targetPitch  = Mathf.Clamp(_targetPitch, -_config.MaxPitchAngle, _config.MaxPitchAngle);
+            _targetRoll  -= cmd.Roll * _config.RollSpeed * dt;
+            _targetRoll   = Mathf.Clamp(_targetRoll, -_config.MaxRollAngle, _config.MaxRollAngle);
+
+            // Neutral return when no input
+            if (Mathf.Abs(cmd.Pitch) < 0.01f)
+                _targetPitch = Mathf.MoveTowards(_targetPitch, 0f, _config.PitchSpeed * 0.4f * dt);
+            if (Mathf.Abs(cmd.Roll) < 0.01f)
+                _targetRoll  = Mathf.MoveTowards(_targetRoll,  0f, _config.RollSpeed  * 0.4f * dt);
+
+            // ── Visual tilt ──────────────────────────────────────────────────
+            ApplyPitchVisual(_targetPitch, _config.PitchSmooth);
+            ApplyRollVisual(_targetRoll,   _config.RollSmooth);
+
+            // ── World turn: roll banks into yaw turn; Yaw input adds directly ─
+            float rollFraction = _targetRoll / _config.MaxRollAngle;
+            float yawAdd       = cmd.Yaw * _config.YawSpeed * dt;
+            ApplyYawTurn(rollFraction + yawAdd, 0f, _config.TurningSpeed);
+
+            // ── Velocity override ─────────────────────────────────────────────
+            SetFlightVelocity(FlightForward, _currentSpeed);
+
+            SpinPropeller(cmd.Throttle);
+
+            // ── Auto-land ────────────────────────────────────────────────────
+            if (cmd.Brake && IsNearGround())
+            {
+                _groundSpeed = _currentSpeed;
+                EndFlight();
+            }
+        }
+
+        // ── Helpers ──────────────────────────────────────────────────────────
+
+        private bool IsNearGround() =>
+            Physics.Raycast(transform.position, Vector3.down, _config.LandingHeight + 1f);
+
+        private void SpinPropeller(float throttle)
+        {
+            if (_propeller == null || throttle < 0.01f) return;
+            _propeller.Rotate(Vector3.forward,
+                throttle * _propellerSpinSpeed * Time.fixedDeltaTime, Space.Self);
+        }
+
+        private void SyncLandingGear()
+        {
+            if (_landingGearWheels == null) return;
+            for (int i = 0; i < _landingGearWheels.Length; i++)
+            {
+                var w = _landingGearWheels[i];
+                if (w == null) continue;
+                if (_landingGearMeshes != null && i < _landingGearMeshes.Length && _landingGearMeshes[i] != null)
                 {
-                    var w = _landingGearWheels[i];
-                    if (w == null) continue;
-                    w.brakeTorque = cmd.Brake && IsOnGround() ? 5000f : 0f;
-                    if (i < _landingGearMeshes.Length && _landingGearMeshes[i] != null)
-                    {
-                        w.GetWorldPose(out Vector3 pos, out Quaternion rot);
-                        _landingGearMeshes[i].SetPositionAndRotation(pos, rot);
-                    }
+                    w.GetWorldPose(out Vector3 pos, out Quaternion rot);
+                    _landingGearMeshes[i].SetPositionAndRotation(pos, rot);
                 }
             }
-
-            // ── Propeller visual ──────────────────────────────────────────────
-            if (_propeller != null)
-                _propeller.Rotate(Vector3.forward,
-                    _currentThrottle * _propellerSpinSpeed * dt, Space.Self);
-
-            // ── Stats ─────────────────────────────────────────────────────────
-            _speedKmh    = speedFwd * 3.6f;
-            _altitudeM   = transform.position.y;
-            _headingDeg  = (transform.eulerAngles.y + 360f) % 360f;
-            _throttlePct = _currentThrottle * 100f;
-
-            // ── Exit ──────────────────────────────────────────────────────────
-            if (_inputAdapter.ConsumeExitPressed())
-                _onExitRequested?.Invoke();
         }
 
-        // True when any landing gear wheel is touching the ground.
-        private bool IsOnGround()
+        private void ResetLandingGear()
         {
-            if (_landingGearWheels == null || _landingGearWheels.Length == 0)
-                return false;
+            if (_landingGearWheels == null) return;
             foreach (var w in _landingGearWheels)
-                if (w != null && w.isGrounded) return true;
-            return false;
+                if (w != null) { w.motorTorque = 0f; w.brakeTorque = 0f; }
         }
     }
 }
