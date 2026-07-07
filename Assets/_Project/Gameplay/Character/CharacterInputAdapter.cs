@@ -1,5 +1,6 @@
 using UnityEngine;
 using Game.Core.Input;
+using Game.Core.Weapons;
 using Game.Gameplay.Character.Input;
 
 namespace Game.Gameplay.Character
@@ -14,16 +15,45 @@ namespace Game.Gameplay.Character
         private bool    _sprintHeld;
         private bool    _crouchPressed;
         private bool    _interactPressed;
-        private bool    _toggleCameraConsumed;
+        private bool    _interactPending;
         private bool    _toggleCameraPending;
+
+        // Weapon input
+        private bool  _fireHeld;
+        private bool  _aimHeld;
+        private bool  _reloadPending;
+        private float _switchDelta;
+        private bool  _throwPending;
 
         public CharacterMoveCommand Command => new CharacterMoveCommand(
             _move, _look, _jumpPressed, _sprintHeld, _crouchPressed, _interactPressed);
+
+        public WeaponCommand WeaponCommand
+        {
+            get
+            {
+                var cmd = new WeaponCommand(
+                    firePressed:   _fireHeld,
+                    aimHeld:       _aimHeld,
+                    reloadPressed: _reloadPending,
+                    switchDelta:   _switchDelta,
+                    throwPressed:  _throwPending);
+                _throwPending = false;   // one-shot: consume after read
+                return cmd;
+            }
+        }
 
         public bool ConsumeToggleCamera()
         {
             if (!_toggleCameraPending) return false;
             _toggleCameraPending = false;
+            return true;
+        }
+
+        public bool ConsumeInteract()
+        {
+            if (!_interactPending) return false;
+            _interactPending = false;
             return true;
         }
 
@@ -50,11 +80,29 @@ namespace Game.Gameplay.Character
                 onCanceled:  () => _crouchPressed = false);
 
             binder.BindButton("Interact",
-                onStarted:   () => _interactPressed = true,
-                onCanceled:  () => _interactPressed = false);
+                onStarted:   () => { _interactPressed = true;  _interactPending = true; },
+                onCanceled:  () =>   _interactPressed = false);
 
             binder.BindButton("ToggleCamera",
                 onStarted:   () => _toggleCameraPending = true);
+
+            binder.BindButton("Fire",
+                onStarted:   () => _fireHeld = true,
+                onCanceled:  () => _fireHeld = false);
+
+            binder.BindButton("Aim",
+                onStarted:   () => _aimHeld = true,
+                onCanceled:  () => _aimHeld = false);
+
+            binder.BindButton("Reload",
+                onStarted:   () => _reloadPending = true);
+
+            binder.BindAxis1D("SwitchWeapon",
+                onPerformed: v  => _switchDelta = v,
+                onCanceled:  () => _switchDelta = 0f);
+
+            binder.BindButton("Throw",
+                onStarted:   () => _throwPending = true);
         }
     }
 }

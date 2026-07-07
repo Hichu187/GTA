@@ -1,11 +1,15 @@
+using System;
 using UnityEngine;
 using Game.Core.Camera;
 using Game.Core.HUD;
 using Game.Core.Input;
 using Game.Core.Interaction;
+using Game.Core.Persistence;
 using Game.Core.Possession;
+using Game.Core.Weapons;
 using Game.Gameplay.Character.Locomotion;
 using Game.Gameplay.Character.Stats;
+using Game.Services;
 
 namespace Game.Gameplay.Character
 {
@@ -13,7 +17,8 @@ namespace Game.Gameplay.Character
     [RequireComponent(typeof(CharacterInputAdapter))]
     [RequireComponent(typeof(CharacterCameraProvider))]
     [RequireComponent(typeof(CharacterHUDProvider))]
-    public class Character : MonoBehaviour, IPossessable, ICharacterStats, IInteractor
+    [RequireComponent(typeof(InteractionDetector))]
+    public class Character : MonoBehaviour, IPossessable, ICharacterStats, IInteractor, IDamageable, ISaveable
     {
         [SerializeField] private CharacterConfig _config = new CharacterConfig();
         [SerializeField] private float _maxHealth  = 100f;
@@ -23,9 +28,13 @@ namespace Game.Gameplay.Character
         private CharacterInputAdapter   _inputAdapter;
         private CharacterCameraProvider _cameraProvider;
         private CharacterHUDProvider    _hudProvider;
+        private InteractionDetector     _interactionDetector;
+        private IWeaponHolder           _weaponHolder;    // optional — null if no WeaponHolder on GO
         private LocomotionStateMachine  _fsm;
         private LocomotionContext       _ctx;
         private Camera                  _mainCamera;
+
+        public bool LocomotionLocked { get; private set; }
 
         private float _health;
         private float _stamina;
@@ -37,20 +46,69 @@ namespace Game.Gameplay.Character
         public float Stamina    => _stamina;
         public float MaxStamina => _maxStamina;
 
+        // IDamageable
+        public float CurrentHealth => _health;
+        public void TakeDamage(float amount, DamageType type)
+        {
+            _health = Mathf.Clamp(_health - amount, 0f, _maxHealth);
+        }
+
+        // ISaveable
+        public string SaveKey => "Character_" + gameObject.name;
+
+        public string CaptureState()
+        {
+            var pos = transform.position;
+            var data = new CharacterSaveData
+            {
+                health  = _health,
+                stamina = _stamina,
+                posX    = pos.x,
+                posY    = pos.y,
+                posZ    = pos.z,
+                rotY    = transform.eulerAngles.y,
+            };
+            return JsonUtility.ToJson(data);
+        }
+
+        public void RestoreState(string json)
+        {
+            var data = JsonUtility.FromJson<CharacterSaveData>(json);
+            _health  = Mathf.Clamp(data.health,  0f, _maxHealth);
+            _stamina = Mathf.Clamp(data.stamina, 0f, _maxStamina);
+            transform.SetPositionAndRotation(
+                new Vector3(data.posX, data.posY, data.posZ),
+                Quaternion.Euler(0f, data.rotY, 0f));
+        }
+
+        [Serializable]
+        private class CharacterSaveData
+        {
+            public float health;
+            public float stamina;
+            public float posX, posY, posZ;
+            public float rotY;
+        }
+
         // IInteractor
         public Transform InteractorTransform => transform;
+        public void SetLocomotionLocked(bool locked) => LocomotionLocked = locked;
 
         // IPossessable
+        public Transform               EnterAnchor    => null;
+        public Transform               ExitAnchor     => null;
         public ICameraContextProvider  CameraProvider => _cameraProvider;
         public IHUDContextProvider     HUDProvider    => _hudProvider;
         public IInputActionMapProvider InputProvider  => _inputAdapter;
 
         private void Awake()
         {
-            _controller     = GetComponent<CharacterController>();
-            _inputAdapter   = GetComponent<CharacterInputAdapter>();
-            _cameraProvider = GetComponent<CharacterCameraProvider>();
-            _hudProvider    = GetComponent<CharacterHUDProvider>();
+            _controller          = GetComponent<CharacterController>();
+            _inputAdapter        = GetComponent<CharacterInputAdapter>();
+            _cameraProvider      = GetComponent<CharacterCameraProvider>();
+            _hudProvider         = GetComponent<CharacterHUDProvider>();
+            _interactionDetector = GetComponent<InteractionDetector>();
+            _weaponHolder        = GetComponent<IWeaponHolder>();   // null if not present
             _hudProvider.StatsSource = this;
 
             _health  = _maxHealth;
@@ -65,17 +123,42 @@ namespace Game.Gameplay.Character
             _mainCamera = Camera.main;
         }
 
+        private void Start()
+        {
+            GameplayServiceLocator.Current?.SaveService?.Register(this);
+        }
+
+        private void OnDestroy()
+        {
+            GameplayServiceLocator.Current?.SaveService?.Unregister(this);
+        }
+
         public void OnPossess(PossessionContext context)
         {
+            // Unparent from any vehicle seat before re-enabling movement.
+            transform.SetParent(null);
+
+            if (context.AnchorPoint != null)
+                transform.SetPositionAndRotation(
+                    context.AnchorPoint.position,
+                    context.AnchorPoint.rotation);
+
             _active = true;
             _controller.enabled = true;
             _fsm.Start(_ctx);
         }
 
-        public void OnUnpossess()
+        public void OnUnpossess(PossessionContext context)
         {
             _active = false;
             _controller.enabled = false;
+
+            if (context.AnchorPoint != null)
+            {
+                // Parent into vehicle seat so character moves with the vehicle.
+                transform.SetParent(context.AnchorPoint);
+                transform.SetLocalPositionAndRotation(Vector3.zero, Quaternion.identity);
+            }
         }
 
         private void Update()
@@ -89,7 +172,22 @@ namespace Game.Gameplay.Character
 
             _cameraProvider.HandleLook(_ctx.Command.LookAxis);
 
-            _fsm.Tick(_ctx);
+            // FP: horizontal look is body rotation; TP: 0 (no-op).
+            transform.Rotate(0f, _cameraProvider.ConsumeFPBodyYawDelta(), 0f);
+
+            // Interact: unlock locomotion if locked, otherwise try interacting with nearby entity.
+            if (_inputAdapter.ConsumeInteract())
+            {
+                if (LocomotionLocked)
+                    SetLocomotionLocked(false);
+                else
+                    _interactionDetector.TryInteract(this);
+            }
+
+            if (!LocomotionLocked)
+                _fsm.Tick(_ctx);
+            else
+                _ctx.MoveSpeed = 0f;
 
             // Camera-relative movement: project camera forward/right onto XZ plane.
             var camForward = _mainCamera != null
@@ -104,12 +202,19 @@ namespace Game.Gameplay.Character
             var motion    = worldMove * _ctx.MoveSpeed + Vector3.up * _ctx.VerticalVelocity;
             _controller.Move(motion * Time.deltaTime);
 
-            // Rotate character body to face movement direction smoothly.
-            if (worldMove.magnitude > 0.01f)
+            // TP only: rotate body to face movement direction.
+            // FP: body already tracks look direction via ConsumeFPBodyYawDelta above.
+            if (_cameraProvider.CurrentMode == CharacterCameraProvider.CameraMode.ThirdPerson
+                && worldMove.magnitude > 0.01f)
+            {
                 transform.rotation = Quaternion.Slerp(
                     transform.rotation,
                     Quaternion.LookRotation(worldMove),
                     15f * Time.deltaTime);
+            }
+
+            // Weapon tick — WeaponHolder handles its own logic when present
+            _weaponHolder?.Tick(_inputAdapter.WeaponCommand);
         }
     }
 }
