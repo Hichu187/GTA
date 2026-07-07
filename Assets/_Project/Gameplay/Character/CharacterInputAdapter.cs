@@ -14,6 +14,7 @@ namespace Game.Gameplay.Character
         private bool    _jumpPressed;
         private bool    _sprintHeld;
         private bool    _crouchPressed;
+        private bool    _crouchPending;
         private bool    _interactPressed;
         private bool    _interactPending;
         private bool    _toggleCameraPending;
@@ -50,6 +51,13 @@ namespace Game.Gameplay.Character
             return true;
         }
 
+        public bool ConsumeCrouch()
+        {
+            if (!_crouchPending) return false;
+            _crouchPending = false;
+            return true;
+        }
+
         public bool ConsumeInteract()
         {
             if (!_interactPending) return false;
@@ -76,8 +84,8 @@ namespace Game.Gameplay.Character
                 onCanceled:  () => _sprintHeld    = false);
 
             binder.BindButton("Crouch",
-                onStarted:   () => _crouchPressed = true,
-                onCanceled:  () => _crouchPressed = false);
+                onStarted:   () => { _crouchPressed = true; _crouchPending = true; },
+                onCanceled:  () =>    _crouchPressed = false);
 
             binder.BindButton("Interact",
                 onStarted:   () => { _interactPressed = true;  _interactPending = true; },

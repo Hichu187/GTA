@@ -12,6 +12,7 @@ namespace Game.Gameplay.Character.Locomotion
         public float                MoveSpeed;
         public float                StateTimer;
 
-        public bool IsGrounded => Controller.isGrounded;
+        public bool IsGrounded     => Controller.isGrounded;
+        public bool CrouchRequested;  // set by CrouchAbility, read by FSM states
     }
 }

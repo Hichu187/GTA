@@ -15,7 +15,7 @@ namespace Game.Gameplay.Character.Locomotion.States
             if (ctx.IsGrounded) ctx.VerticalVelocity = -2f;
             else return LocomotionStateId.Fall;
 
-            if (ctx.Command.CrouchPressed) return LocomotionStateId.Crouch;
+            if (ctx.CrouchRequested) return LocomotionStateId.Crouch;
             if (ctx.Command.JumpPressed)   return LocomotionStateId.Jump;
 
             var mag = ctx.Command.MoveAxis.magnitude;

@@ -4,6 +4,7 @@
     "references": [
         "Game.Core",
         "Game.Services",
+        "Game.Systems.Persistence",
         "Unity.Cinemachine",
         "Unity.InputSystem"
     ],

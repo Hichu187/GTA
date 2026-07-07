@@ -13,7 +13,7 @@ namespace Game.Gameplay.Character.Locomotion.States
             if (ctx.IsGrounded) ctx.VerticalVelocity = -2f;
             else return LocomotionStateId.Fall;
 
-            if (ctx.Command.CrouchPressed)
+            if (!ctx.CrouchRequested)
             {
                 return ctx.Command.MoveAxis.magnitude > 0.01f
                     ? LocomotionStateId.Walk

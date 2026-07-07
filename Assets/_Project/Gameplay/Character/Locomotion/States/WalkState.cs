@@ -14,7 +14,7 @@ namespace Game.Gameplay.Character.Locomotion.States
             else return LocomotionStateId.Fall;
 
             if (ctx.Command.JumpPressed)   return LocomotionStateId.Jump;
-            if (ctx.Command.CrouchPressed) return LocomotionStateId.Crouch;
+            if (ctx.CrouchRequested) return LocomotionStateId.Crouch;
             if (ctx.Command.SprintHeld && ctx.Command.MoveAxis.magnitude > 0.01f) return LocomotionStateId.Sprint;
 
             var mag = ctx.Command.MoveAxis.magnitude;

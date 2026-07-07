@@ -7,6 +7,7 @@ using Game.Core.Interaction;
 using Game.Core.Persistence;
 using Game.Core.Possession;
 using Game.Core.Weapons;
+using Game.Gameplay.Character.Abilities;
 using Game.Gameplay.Character.Locomotion;
 using Game.Gameplay.Character.Stats;
 using Game.Services;
@@ -29,12 +30,15 @@ namespace Game.Gameplay.Character
         private CharacterCameraProvider _cameraProvider;
         private CharacterHUDProvider    _hudProvider;
         private InteractionDetector     _interactionDetector;
-        private IWeaponHolder           _weaponHolder;    // optional — null if no WeaponHolder on GO
+        private IWeaponHolder           _weaponHolder;
         private LocomotionStateMachine  _fsm;
         private LocomotionContext       _ctx;
         private Camera                  _mainCamera;
 
-        public bool LocomotionLocked { get; private set; }
+        private AbilitySystem         _abilitySystem;
+        private CrouchAbility         _crouchAbility;
+        private InteractAbility       _interactAbility;
+        private LocomotionLockAbility _lockAbility;
 
         private float _health;
         private float _stamina;
@@ -92,7 +96,11 @@ namespace Game.Gameplay.Character
 
         // IInteractor
         public Transform InteractorTransform => transform;
-        public void SetLocomotionLocked(bool locked) => LocomotionLocked = locked;
+        public void SetLocomotionLocked(bool locked)
+        {
+            if (locked) _lockAbility.Activate();
+            else        _lockAbility.Cancel();
+        }
 
         // IPossessable
         public Transform               EnterAnchor    => null;
@@ -121,6 +129,14 @@ namespace Game.Gameplay.Character
             };
             _fsm        = new LocomotionStateMachine();
             _mainCamera = Camera.main;
+
+            _abilitySystem   = gameObject.AddComponent<AbilitySystem>();
+            _crouchAbility   = new CrouchAbility();
+            _interactAbility = new InteractAbility(_interactionDetector, this);
+            _lockAbility     = new LocomotionLockAbility();
+            _abilitySystem.Register(_crouchAbility);
+            _abilitySystem.Register(_interactAbility);
+            _abilitySystem.Register(_lockAbility);
         }
 
         private void Start()
@@ -175,16 +191,22 @@ namespace Game.Gameplay.Character
             // FP: horizontal look is body rotation; TP: 0 (no-op).
             transform.Rotate(0f, _cameraProvider.ConsumeFPBodyYawDelta(), 0f);
 
-            // Interact: unlock locomotion if locked, otherwise try interacting with nearby entity.
+            if (_inputAdapter.ConsumeCrouch())
+            {
+                if (_crouchAbility.IsActive) _crouchAbility.Cancel();
+                else                         _crouchAbility.Activate();
+            }
+            _ctx.CrouchRequested = _crouchAbility.IsActive;
+
             if (_inputAdapter.ConsumeInteract())
             {
-                if (LocomotionLocked)
-                    SetLocomotionLocked(false);
+                if (_abilitySystem.IsLocomotionLocked)
+                    _abilitySystem.CancelAllLocking();
                 else
-                    _interactionDetector.TryInteract(this);
+                    _interactAbility.Activate();
             }
 
-            if (!LocomotionLocked)
+            if (!_abilitySystem.IsLocomotionLocked)
                 _fsm.Tick(_ctx);
             else
                 _ctx.MoveSpeed = 0f;

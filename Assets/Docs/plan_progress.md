@@ -1,6 +1,6 @@
 # Plan Progress — Possession-Based Multi-Entity Control System
 
-*Cập nhật lần cuối: 2026-07-07 (Phase 8 Track E 🔄 — Save/Load code hoàn thành; còn scene setup)*
+*Cập nhật lần cuối: 2026-07-07 (Phase 8 Track D ✅ — Ability System hoàn thành)*
 
 ---
 
@@ -16,7 +16,7 @@
 | Phase 5 | Vehicle thật đầu tiên (Motorcycle) | 🔄 Đang làm | 90% |
 | Phase 6 | Vehicle thứ 2 & 3 (Car, Airplane) | 🔄 Đang làm | 80% |
 | Phase 7 | Weapon System (súng / melee / throwable / consumable) | 🔄 Đang làm | 75% |
-| Phase 8 | Ability System + Save/Load nền tảng | 🔄 Đang làm | 45% (Track E code xong, Track D chưa bắt đầu) |
+| Phase 8 | Ability System + Save/Load nền tảng | 🔄 Đang làm | 90% (Track D + Track E code xong; còn scene setup) |
 | Phase 9+ | Mở rộng theo roadmap | ⬜ Chưa bắt đầu | 0% |
 
 **Trạng thái ký hiệu:** ✅ Hoàn thành | 🔄 Đang làm | ⏸ Tạm dừng | ⬜ Chưa bắt đầu | ❌ Bị chặn
@@ -266,6 +266,12 @@
 > **Điều kiện bắt đầu:** Phase 5.  
 > **Có thể giao 2 người làm đồng thời.**
 
+### Editor Setup Wizard ✅
+- [x] `VehicleSetupWizard.cs` — 3 menu items: **Game → Vehicle Setup → Motorcycle / Car / Airplane**
+  - Mỗi wizard: tạo GO + Rigidbody + BoxCollider + WheelCollider children + Anchor children + VCam + HUD prefabs + wire toàn bộ SerializedField + EnterVehicleInteractable
+  - `Game.Editor.Setup.asmdef` thêm refs: Vehicles.Common/Motorcycle/Car/Airplane, Interactables, Unity.TextMeshPro
+  - Idempotent: chạy lại không tạo duplicate
+
 ### Car ✅ code xong
 - [x] `CarController : VehicleControllerBase, ICarStats` — 4 WheelCollider, RWD/FWD/AWD switch
 - [x] `GearState` enum (Drive/Neutral/Reverse) + `ICarStats` interface
@@ -369,14 +375,27 @@
 > **Điều kiện bắt đầu:** Phase 3 (Track D), Phase 5 (Track E).  
 > **Track D và E độc lập nhau.**
 
-### Track D — Ability System ⬜
-- [ ] `ICharacterAbility` interface (CanActivate, Activate, Cancel, LocksLocomotion)
-- [ ] `AbilitySystem` component tách biệt với LocomotionStateMachine
-- [ ] Ability: Crouch (tích hợp lại từ Locomotion)
-- [ ] Ability: Interact (nâng cấp từ Phase 4)
-- [ ] Ability: PushObject (LocksLocomotion = true)
-- [ ] Ability: Sit (LocksLocomotion = true)
-- [ ] LocomotionStateMachine hỏi qua interface "có Ability nào đang khoá không" — không biết Ability cụ thể
+### Track D — Ability System ✅
+
+#### Core (Game.Core/Abilities/) ✅
+- [x] `ICharacterAbility` interface (LocksLocomotion, IsActive, Activate, Cancel)
+
+#### Gameplay (Game.Gameplay.Character/Abilities/) ✅
+- [x] `AbilitySystem` MonoBehaviour — Register/Unregister, IsLocomotionLocked (OR of all active locking abilities), CancelAllLocking()
+- [x] `CrouchAbility` — LocksLocomotion=false, IsActive toggle; Character copies IsActive → LocomotionContext.CrouchRequested
+- [x] `InteractAbility` — one-shot (IsActive always false), Activate() → InteractionDetector.TryInteract()
+- [x] `LocomotionLockAbility` — LocksLocomotion=true; used by SetLocomotionLocked (Sit, PushObject)
+
+#### Locomotion FSM updates ✅
+- [x] `LocomotionContext.CrouchRequested` flag — replaces direct Command.CrouchPressed reads in FSM
+- [x] `IdleState`, `WalkState`, `RunState` — transition to Crouch via `ctx.CrouchRequested`
+- [x] `CrouchState` — exits when `!ctx.CrouchRequested`
+
+#### Character.cs integration ✅
+- [x] Xoá `LocomotionLocked` bool — thay bằng `_abilitySystem.IsLocomotionLocked`
+- [x] `SetLocomotionLocked(bool)` delegate sang `_lockAbility.Activate/Cancel` (IInteractor compat giữ nguyên)
+- [x] `CharacterInputAdapter.ConsumeCrouch()` — one-shot consume pattern giống ConsumeInteract
+- [x] `Update()`: crouch toggle → CrouchAbility; interact → InteractAbility hoặc CancelAllLocking; FSM tick guard dùng AbilitySystem
 
 ### Track E — Save/Load 🔄 (Phase 8)
 
@@ -466,6 +485,8 @@
 | 2026-07-07 | — | Phase 4 ✅ HOÀN THÀNH: Interaction System. InteractionDetector (OverlapSphereNonAlloc) + IInteractor.SetLocomotionLocked + CharacterInputAdapter.ConsumeInteract + Character.LocomotionLocked. Exit vehicle qua PossessionContext.OnExitRequested callback → PossessionManager.PossessPrevious(). 4 interactable: EnterVehicle, PickItem, PushObject, Sit. PossessionTester deprecated. |
 | 2026-07-07 | — | Phase 5 code 90%: MotorcycleController (VehicleControllerBase + IMotorcycleStats, scripted physics: throttle/brake/steer yaw + lean + flat-velocity alignment). Input map Vehicle_Motorcycle (W/S/AD/Mouse/F + Gamepad). MotorcycleInputAdapter (ConsumeExitPressed). MotorcycleCameraProvider + MotorcycleHUDProvider + SpeedoModule + RPMModule (TMPro). VehicleControllerBase thêm OnOccupiedFixedUpdate hook. Còn scene setup trong Unity Editor. |
 | 2026-07-07 | — | Phase 5 nâng cấp Mức 1+2: MotorcycleController rewrite sang WheelCollider physics (motorTorque/brakeTorque/steerAngle) + PD lean torque controller + GetWorldPose mesh sync + handlebar visual + CoM setup. MotorcycleConfig rewrite với AnimationCurve SteerRestrictionCurve + [Header] sections. Mức 3 (IK Rider) đánh dấu để làm sau. |
+| 2026-07-07 | — | Phase 6 Editor Wizard xong: VehicleSetupWizard.cs (Game → Vehicle Setup → Motorcycle/Car/Airplane). Tự động tạo GO hierarchy, WheelCollider, Anchor, VCam, HUD prefabs, wire toàn bộ SerializedField, EnterVehicleInteractable. Idempotent. Game.Editor.Setup.asmdef thêm 6 refs mới. |
 | 2026-07-07 | — | Phase 6 code 80%: CarController (4-WheelCollider, RWD/FWD/AWD, anti-roll, gear D/N/R) + AirplaneController (thrust+lift+ControlEffectiveness curve+pitch/roll/yaw torque+propeller visual+landing gear). Input map Vehicle_Car + Vehicle_Airplane. 8 HUD modules (CarSpeedo, Gear, AirSpeedo, Altitude, Heading). Còn scene setup + control tuning. |
 | 2026-07-07 | — | Phase 7 code 75%: Weapon System. 6 Core contracts (IDamageable/IWeapon/IWeaponHolder/WeaponCommand...). Game.Gameplay.Weapons asmdef (chỉ depend Game.Core). WeaponBase + WeaponHolder. GunBase (raycast, ammo, reload, aim lerp) → Pistol/Rifle/Shotgun. MeleeBase (SphereCast, light/heavy) → Knife/Bat. ThrowableBase (physics launch, cook, IsConsumed) → Grenade. ConsumableBase → MedKit. WeaponAmmoModule + WeaponNameModule + WeaponPickupInteractable. Character implement IDamageable + hook optional WeaponHolder.Tick(). CharacterInputAdapter thêm WeaponCommand (Fire/Aim/Reload/Switch/Throw). CharacterHUDProvider auto-add weapon HUD. GameInputActions thêm 5 actions Character map. Còn scene setup trong Unity Editor. |
+| 2026-07-07 | — | Phase 8 Track D ✅ HOÀN THÀNH: Ability System. ICharacterAbility (Core) + AbilitySystem + CrouchAbility + InteractAbility + LocomotionLockAbility (Game.Gameplay.Character.Abilities). LocomotionContext thêm CrouchRequested. 4 FSM states cập nhật. CharacterInputAdapter thêm ConsumeCrouch(). Character.cs: xoá LocomotionLocked bool, wire AbilitySystem, SetLocomotionLocked delegate → LocomotionLockAbility. Không sửa PossessionManager/CameraManager/HUDManager/Interactables. |
 | 2026-07-07 | — | Phase 8 Track E code hoàn thành (~90%): Save/Load System. ISaveable (JSON string approach) + PersistentGUID (Core). SaveFile/SaveEntry/SaveService (Game.Systems.Persistence — Register pattern, version-checked JSON file). WorldStateTracker (Game.Services — HashSet<GUID> + ApplyToScene). WeaponRegistry ScriptableObject (typeName→prefab). GunBase.SetAmmo + WeaponHolder.ClearAll + WeaponHolder ISaveable (full restore từ registry). Character ISaveable (health/stamina/position). WeaponPickupInteractable thêm MarkConsumed. GameplayServiceLocator thêm SaveService + WorldStateTracker. Editor tool PersistentGUIDAssigner (MenuItem + CustomEditor Inspector button). asmdef cập nhật: Game.Services thêm Persistence, Game.Gameplay.Weapons + Character thêm Game.Services. Còn scene setup. |

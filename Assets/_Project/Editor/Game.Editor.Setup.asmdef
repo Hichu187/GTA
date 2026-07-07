@@ -5,7 +5,13 @@
         "Game.Core",
         "Game.Gameplay.Character",
         "Game.Services",
-        "Unity.Cinemachine"
+        "Unity.Cinemachine",
+        "Unity.TextMeshPro",
+        "Game.Gameplay.Vehicles.Common",
+        "Game.Gameplay.Vehicles.Motorcycle",
+        "Game.Gameplay.Vehicles.Car",
+        "Game.Gameplay.Vehicles.Airplane",
+        "Game.Gameplay.Interactables"
     ],
     "includePlatforms": ["Editor"],
     "excludePlatforms": [],
