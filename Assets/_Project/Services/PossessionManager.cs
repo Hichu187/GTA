@@ -13,7 +13,10 @@ namespace Game.Services
         [SerializeField] private HUDManager    _hudManager;
 
         private IPossessable _current;
-        public  IPossessable Current => _current;
+        private IPossessable _previous;
+
+        public IPossessable Current  => _current;
+        public IPossessable Previous => _previous;
 
         public void Possess(IPossessable target)
         {
@@ -22,13 +25,19 @@ namespace Game.Services
             if (_current != null)
             {
                 _current.CameraProvider.CameraRigChanged -= OnCameraRigChanged;
-                _current.OnUnpossess();
+                _current.OnUnpossess(new PossessionContext(0, target.EnterAnchor));
             }
 
+            _previous = _current;
             _inputManager.SwitchCurrentActionMap(target.InputProvider.ActionMapName);
-            target.OnPossess(PossessionContext.Default);
-            target.InputProvider.BindActions(_inputManager);
 
+            // Inject exit callback so possessed entity can trigger return to previous.
+            target.OnPossess(new PossessionContext(
+                playerIndex:     0,
+                anchorPoint:     _previous?.ExitAnchor,
+                onExitRequested: PossessPrevious));
+
+            target.InputProvider.BindActions(_inputManager);
             _cameraManager.ApplyContext(target.CameraProvider);
             _hudManager.ApplyContext(target.HUDProvider);
 
@@ -36,12 +45,17 @@ namespace Game.Services
             _current = target;
         }
 
+        public void PossessPrevious()
+        {
+            if (_previous != null) Possess(_previous);
+        }
+
         public void Unpossess()
         {
             if (_current != null)
             {
                 _current.CameraProvider.CameraRigChanged -= OnCameraRigChanged;
-                _current.OnUnpossess();
+                _current.OnUnpossess(PossessionContext.Default);
                 _current = null;
             }
         }
