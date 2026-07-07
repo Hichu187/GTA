@@ -1,0 +1,19 @@
+{
+    "name": "Game.Editor.Setup",
+    "rootNamespace": "Game.Editor",
+    "references": [
+        "Game.Core",
+        "Game.Gameplay.Character",
+        "Game.Services",
+        "Unity.Cinemachine"
+    ],
+    "includePlatforms": ["Editor"],
+    "excludePlatforms": [],
+    "allowUnsafeCode": false,
+    "overrideReferences": false,
+    "precompiledReferences": [],
+    "autoReferenced": false,
+    "defineConstraints": [],
+    "versionDefines": [],
+    "noEngineReferences": false
+}

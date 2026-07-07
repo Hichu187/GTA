@@ -7,7 +7,7 @@ namespace Game.Gameplay.Character.Locomotion.States
         public void Enter(LocomotionContext ctx)
         {
             ctx.VerticalVelocity = ctx.Config.JumpForce;
-            ctx.MoveSpeed        = ctx.Config.RunSpeed;
+            // MoveSpeed intentionally not reset — preserves sprint/run speed in the air.
         }
 
         public LocomotionStateId Update(LocomotionContext ctx)

@@ -15,9 +15,10 @@ namespace Game.Gameplay.Character
         [Header("Look Sensitivity")]
         [SerializeField] private float _sensitivity = 2f;
 
-        private CameraMode             _current;
+        private CameraMode               _current;
         private CinemachineOrbitalFollow _tpOrbital;
         private CinemachinePanTilt       _fpPanTilt;
+        private float                    _pendingFPYaw;
 
         public CameraMode CurrentMode => _current;
 
@@ -35,7 +36,6 @@ namespace Game.Gameplay.Character
         }
 
         // Called by Character.Update() each frame while possessed.
-        // Cinemachine owns the axis values — no manual clamping needed (configured on component).
         public void HandleLook(Vector2 lookAxis)
         {
             if (_current == CameraMode.ThirdPerson && _tpOrbital != null)
@@ -45,9 +45,23 @@ namespace Game.Gameplay.Character
             }
             else if (_current == CameraMode.FirstPerson && _fpPanTilt != null)
             {
-                _fpPanTilt.PanAxis.Value  += lookAxis.x * _sensitivity;
+                // Horizontal pan is baked into Character body rotation (see ConsumeFPBodyYawDelta).
+                // PanTilt only handles vertical tilt to avoid double-rotation with the body.
+                _pendingFPYaw         = lookAxis.x * _sensitivity;
+                _fpPanTilt.PanAxis.Value  = 0f;
                 _fpPanTilt.TiltAxis.Value -= lookAxis.y * _sensitivity;
             }
+        }
+
+        /// <summary>
+        /// Returns horizontal yaw delta (degrees) for Character to apply to its body in FP mode.
+        /// Must be consumed every frame — returns 0 in TP mode.
+        /// </summary>
+        public float ConsumeFPBodyYawDelta()
+        {
+            var delta = _pendingFPYaw;
+            _pendingFPYaw = 0f;
+            return delta;
         }
 
         public void Toggle()
@@ -55,6 +69,11 @@ namespace Game.Gameplay.Character
             _current = _current == CameraMode.ThirdPerson
                 ? CameraMode.FirstPerson
                 : CameraMode.ThirdPerson;
+
+            // Entering FP: reset PanAxis so body rotation alone owns horizontal look.
+            if (_current == CameraMode.FirstPerson && _fpPanTilt != null)
+                _fpPanTilt.PanAxis.Value = 0f;
+
             CameraRigChanged?.Invoke();
         }
 

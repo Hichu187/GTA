@@ -9,6 +9,7 @@ namespace Game.Gameplay.Character.Locomotion.States
         public LocomotionStateId Update(LocomotionContext ctx)
         {
             ctx.VerticalVelocity += ctx.Config.Gravity * Time.deltaTime;
+            if (ctx.VerticalVelocity < -50f) ctx.VerticalVelocity = -50f;
 
             if (ctx.IsGrounded) return LocomotionStateId.Land;
 

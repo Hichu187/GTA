@@ -19,6 +19,8 @@ namespace Game.Gameplay.Character.Stubs
 
         private bool _active;
 
+        public Transform               EnterAnchor    => null;
+        public Transform               ExitAnchor     => null;
         public ICameraContextProvider  CameraProvider => _cameraProvider;
         public IHUDContextProvider     HUDProvider    => _hudProvider;
         public IInputActionMapProvider InputProvider  => _inputProvider;
@@ -37,7 +39,7 @@ namespace Game.Gameplay.Character.Stubs
             _controller.enabled = true;
         }
 
-        public void OnUnpossess()
+        public void OnUnpossess(PossessionContext context)
         {
             _active = false;
             _controller.enabled = false;

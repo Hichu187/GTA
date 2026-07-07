@@ -12,9 +12,10 @@ namespace Game.Gameplay.Character.Locomotion.States
         {
             if (ctx.StateTimer < ctx.Config.LandDuration) return LocomotionStateId.Self;
 
-            return ctx.Command.MoveAxis.magnitude > 0.01f
-                ? LocomotionStateId.Walk
-                : LocomotionStateId.Idle;
+            var mag = ctx.Command.MoveAxis.magnitude;
+            if (mag < 0.01f)                                        return LocomotionStateId.Idle;
+            if (ctx.Command.SprintHeld)                             return LocomotionStateId.Sprint;
+            return mag > ctx.Config.RunThreshold ? LocomotionStateId.Run : LocomotionStateId.Walk;
         }
 
         public void Exit(LocomotionContext ctx) { }
