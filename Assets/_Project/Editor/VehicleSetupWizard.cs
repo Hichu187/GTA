@@ -11,6 +11,7 @@ using Game.Gameplay.Vehicles.Airplane;
 using Game.Gameplay.Vehicles.Helicopter;
 using Game.Gameplay.Vehicles.Glider;
 using Game.Gameplay.Vehicles.Rocket;
+using Game.Gameplay.Vehicles.Tank;
 using Game.Gameplay.Interactables;
 
 namespace Game.Editor
@@ -449,6 +450,84 @@ namespace Game.Editor
         }
 
         // ════════════════════════════════════════════════════════════════════════
+        // TANK         Game / Vehicle Setup / Tank
+        // ════════════════════════════════════════════════════════════════════════
+
+        [MenuItem("Game/Vehicle Setup/Tank")]
+        public static void SetupTank()
+        {
+            var go = FindOrCreateVehicleGO<TankController>("Tank");
+
+            EnsureComponent<TankInputAdapter>(go);
+            EnsureComponent<TankCameraProvider>(go);
+            EnsureComponent<TankHUDProvider>(go);
+            EnsureComponent<TankController>(go);
+
+            var rb = go.GetComponent<Rigidbody>();
+            if (rb)
+            {
+                rb.mass           = 8000f;
+                rb.linearDamping  = 0.5f;
+                rb.angularDamping = 2f;
+                rb.centerOfMass   = new Vector3(0f, -0.5f, 0f);   // lower CoM prevents tipping
+            }
+
+            if (!go.GetComponent<BoxCollider>())
+            {
+                var col    = go.AddComponent<BoxCollider>();
+                col.size   = new Vector3(3.4f, 1.8f, 6.0f);
+                col.center = new Vector3(0f,   0.9f, 0f);
+            }
+
+            // Turret hierarchy: TurretRoot → BarrelRoot → BarrelTip
+            var turretRoot = CreateChild(go.transform, "TurretRoot", new Vector3(0f, 1.8f,  0f));
+            var barrelRoot = CreateChild(turretRoot.transform, "BarrelRoot", new Vector3(0f, 0f, 0f));
+            var barrelTip  = CreateChild(barrelRoot.transform, "BarrelTip",  new Vector3(0f, 0f, 3.5f));
+
+            var enterAnchor = CreateChild(go.transform, "EnterAnchor", new Vector3(0f, 1.5f, 0f));
+            var exitAnchor  = CreateChild(go.transform, "ExitAnchor",  new Vector3(3f, 0f,   0f));
+
+            var vcam = FindOrCreateVehicleVCam("Tank_Vcam", go.transform,
+                           new Vector3(0f, 4f, -12f));
+
+            const string hudFolder = "Assets/_Project/Gameplay/Vehicles/Tank/HUD/Prefabs";
+            EnsureFolderExists(hudFolder);
+            var speedoPrefab = CreateTMProPrefab<TankSpeedoModule>(hudFolder, "TankSpeedo");
+            var ammoPrefab        = CreateTMProPrefab<TankAmmoModule>(hudFolder,       "TankAmmo");
+            var crosshairPrefab   = CreateImagePrefab<TankCrosshairModule>(hudFolder,  "TankCrosshair");
+            var fireCooldownPrefab = CreateSliderPrefab<TankFireCooldownModule>(hudFolder, "TankFireCooldown");
+
+            const string shellFolder = "Assets/_Project/Gameplay/Vehicles/Tank/Projectile/Prefabs";
+            EnsureFolderExists(shellFolder);
+            var shellPrefab = CreateShellPrefab(shellFolder, "TankShell");
+
+            var ctrl = go.GetComponent<TankController>();
+            SetField(ctrl, "_enterAnchor", enterAnchor.transform);
+            SetField(ctrl, "_exitAnchor",  exitAnchor.transform);
+            SetField(ctrl, "_turretRoot",  turretRoot.transform);
+            SetField(ctrl, "_barrelRoot",  barrelRoot.transform);
+            SetField(ctrl, "_barrelTip",   barrelTip.transform);
+            SetField(ctrl, "_shellPrefab", shellPrefab);
+
+            var hud = go.GetComponent<TankHUDProvider>();
+            SetField(go.GetComponent<TankCameraProvider>(), "_vcamGameObject",    vcam);
+            SetField(hud, "_speedoPrefab",      speedoPrefab);
+            SetField(hud, "_ammoPrefab",        ammoPrefab);
+            SetField(hud, "_crosshairPrefab",   crosshairPrefab);
+            SetField(hud, "_fireCooldownPrefab", fireCooldownPrefab);
+
+            var interactable = EnsureComponent<EnterVehicleInteractable>(go);
+            SetField(interactable, "_vehicle", ctrl);
+
+            Finish("Tank",
+                "Attach hull mesh under Tank GO; turret mesh under TurretRoot; barrel mesh under BarrelRoot. " +
+                "Adjust TurretRoot Y to match turret pivot height on your model. " +
+                "Adjust BarrelTip Z to sit at the muzzle end. " +
+                "Create Input Action Map 'Vehicle_Tank' with: Throttle(1D), Steer(1D), Look(2D), Fire(Btn), Exit(Btn). " +
+                "Place GO on Interactable layer.");
+        }
+
+        // ════════════════════════════════════════════════════════════════════════
         // SHARED HELPERS
         // ════════════════════════════════════════════════════════════════════════
 
@@ -591,6 +670,65 @@ namespace Game.Editor
                     AssetDatabase.CreateFolder(current, parts[i]);
                 current = next;
             }
+        }
+
+        static GameObject CreateImagePrefab<T>(string folder, string prefabName) where T : MonoBehaviour
+        {
+            var path     = $"{folder}/{prefabName}.prefab";
+            var existing = AssetDatabase.LoadAssetAtPath<GameObject>(path);
+            if (existing != null) return existing;
+
+            var go = new GameObject(prefabName);
+            go.AddComponent<RectTransform>();
+            go.AddComponent<UnityEngine.UI.Image>();
+            go.AddComponent<T>();
+
+            var prefab = PrefabUtility.SaveAsPrefabAsset(go, path);
+            Object.DestroyImmediate(go);
+            Debug.Log($"[VehicleSetup] Created prefab: {path}");
+            return prefab;
+        }
+
+        static GameObject CreateSliderPrefab<T>(string folder, string prefabName) where T : MonoBehaviour
+        {
+            var path     = $"{folder}/{prefabName}.prefab";
+            var existing = AssetDatabase.LoadAssetAtPath<GameObject>(path);
+            if (existing != null) return existing;
+
+            var go = new GameObject(prefabName);
+            go.AddComponent<RectTransform>();
+            go.AddComponent<UnityEngine.UI.Slider>();
+            go.AddComponent<T>();
+
+            var prefab = PrefabUtility.SaveAsPrefabAsset(go, path);
+            Object.DestroyImmediate(go);
+            Debug.Log($"[VehicleSetup] Created prefab: {path}");
+            return prefab;
+        }
+
+        static GameObject CreateShellPrefab(string folder, string prefabName)
+        {
+            var path     = $"{folder}/{prefabName}.prefab";
+            var existing = AssetDatabase.LoadAssetAtPath<GameObject>(path);
+            if (existing != null) return existing;
+
+            var go = new GameObject(prefabName);
+
+            var rb = go.AddComponent<Rigidbody>();
+            rb.mass                  = 5f;
+            rb.useGravity            = false;   // straight flight; enable for arc trajectory
+            rb.linearDamping         = 0f;
+            rb.collisionDetectionMode = CollisionDetectionMode.ContinuousDynamic;
+
+            var col    = go.AddComponent<SphereCollider>();
+            col.radius = 0.12f;
+
+            go.AddComponent<TankShell>();
+
+            var prefab = PrefabUtility.SaveAsPrefabAsset(go, path);
+            Object.DestroyImmediate(go);
+            Debug.Log($"[VehicleSetup] Created prefab: {path}");
+            return prefab;
         }
 
         static void Finish(string vehicleName, string manualSteps)

@@ -47,10 +47,15 @@ namespace Game.Gameplay.Vehicles.Common
             if (IsOccupied) OnOccupiedFixedUpdate();
         }
 
-        /// <summary>Override to handle per-frame input (non-physics).</summary>
-        protected virtual void OnOccupiedUpdate() { }
+        private void LateUpdate()
+        {
+            if (IsOccupied) OnOccupiedLateUpdate();
+        }
 
-        /// <summary>Override to handle physics — called in FixedUpdate while possessed.</summary>
+        protected virtual void OnOccupiedUpdate() { }
         protected virtual void OnOccupiedFixedUpdate() { }
+
+        // Called after camera finishes updating — ideal for turret/bone alignment.
+        protected virtual void OnOccupiedLateUpdate() { }
     }
 }

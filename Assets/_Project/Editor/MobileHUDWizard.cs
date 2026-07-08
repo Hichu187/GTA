@@ -10,6 +10,7 @@ using Game.Gameplay.Vehicles.Airplane;
 using Game.Gameplay.Vehicles.Helicopter;
 using Game.Gameplay.Vehicles.Glider;
 using Game.Gameplay.Vehicles.Rocket;
+using Game.Gameplay.Vehicles.Tank;
 
 namespace Game.Editor
 {
@@ -34,6 +35,7 @@ namespace Game.Editor
             BuildHelicopter();
             BuildGlider();
             BuildRocket();
+            BuildTank();
             AssetDatabase.SaveAssets();
             AssetDatabase.Refresh();
             Debug.Log("[MobileHUDWizard] All prefabs created.");
@@ -191,6 +193,27 @@ namespace Game.Editor
                 AddOtherButtons(root, new[] { ("Exit", "<Keyboard>/f") });
             });
             WireTo<RocketHUDProvider>(prefab, "_mobileControlsPrefab");
+        }
+
+        // ═══════════════════════════════════════════════════════════════════
+        // TANK — Gas/Brake left, Steer L/R right, Fire prominent bottom-right
+        // ═══════════════════════════════════════════════════════════════════
+
+        [MenuItem("Game/Mobile HUD/Tank")]
+        static void BuildTank()
+        {
+            var prefab = CreatePrefab("MobileControlsHUD_Tank", root =>
+            {
+                AddLookPad(root);
+                AddForwardBackButtons(root, "<Keyboard>/w", "<Keyboard>/s", "GAS", "BRAKE");
+                AddSteer2Buttons(root, "<Keyboard>/a", "<Keyboard>/d");
+                // Fire — large button above the steer pair, bottom-right quadrant
+                MakeActionButton(root, "Btn_Fire", "<Keyboard>/space", "FIRE",
+                    Vector2.right, new Vector2(0.5f, 0.5f),
+                    new Vector2(-175f, 320f), new Vector2(175f, 130f));
+                AddOtherButtons(root, new[] { ("Exit", "<Keyboard>/f") });
+            });
+            WireTo<TankHUDProvider>(prefab, "_mobileControlsPrefab");
         }
 
         // ═══════════════════════════════════════════════════════════════════

@@ -14,6 +14,7 @@
         "Game.Gameplay.Vehicles.Helicopter",
         "Game.Gameplay.Vehicles.Glider",
         "Game.Gameplay.Vehicles.Rocket",
+        "Game.Gameplay.Vehicles.Tank",
         "Game.Gameplay.Interactables",
         "Unity.InputSystem"
     ],

@@ -1,0 +1,19 @@
+{
+    "name": "Game.Gameplay.Vehicles.Tank",
+    "rootNamespace": "Game.Gameplay.Vehicles.Tank",
+    "references": [
+        "Game.Gameplay.Vehicles.Common",
+        "Game.Core",
+        "Unity.TextMeshPro",
+        "Unity.Cinemachine"
+    ],
+    "includePlatforms": [],
+    "excludePlatforms": [],
+    "allowUnsafeCode": false,
+    "overrideReferences": false,
+    "precompiledReferences": [],
+    "autoReferenced": false,
+    "defineConstraints": [],
+    "versionDefines": [],
+    "noEngineReferences": false
+}

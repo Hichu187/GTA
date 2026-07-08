@@ -11,7 +11,7 @@ namespace Game.Gameplay.Character.HUD
         IPointerDownHandler, IDragHandler, IPointerUpHandler
     {
         [Header("Tuning")]
-        [SerializeField] private float _sensitivity      = 0.01f;
+        [SerializeField] private float _sensitivity      = 0.05f;
         [SerializeField] private bool  _invertY          = true;
         [SerializeField] private float _deadZone         = 3f;    // pixels
         [SerializeField] private float _maxDeltaPerFrame = 80f;   // pixels, 0 = no clamp
