@@ -1,0 +1,19 @@
+fileFormatVersion: 2
+guid: f7af36b5e14fea340a6365c4fe3daeeb
+timeCreated: 1450059293
+licenseType: Store
+MonoImporter:
+  serializedVersion: 2
+  defaultReferences: []
+  executionOrder: 0
+  icon: {instanceID: 0}
+  userData: 
+  assetBundleName: 
+  assetBundleVariant: 
+AssetOrigin:
+  serializedVersion: 1
+  productId: 54604
+  packageName: '"Kawaii Tanks Project" Free version 2.0'
+  packageVersion: 2.0
+  assetPath: Assets/Kawaii_Tanks_Project (Free)/Scripts/Fire_Spawn_CS.cs
+  uploadId: 498042

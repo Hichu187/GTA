@@ -8,6 +8,7 @@ using Game.Core.Persistence;
 using Game.Core.Possession;
 using Game.Core.Weapons;
 using Game.Gameplay.Character.Abilities;
+using Game.Gameplay.Character.Animation;
 using Game.Gameplay.Character.Locomotion;
 using Game.Gameplay.Character.Stats;
 using Game.Services;
@@ -19,7 +20,7 @@ namespace Game.Gameplay.Character
     [RequireComponent(typeof(CharacterCameraProvider))]
     [RequireComponent(typeof(CharacterHUDProvider))]
     [RequireComponent(typeof(InteractionDetector))]
-    public class Character : MonoBehaviour, IPossessable, ICharacterStats, IInteractor, IDamageable, ISaveable
+    public class Character : MonoBehaviour, IPossessable, ICharacterStats, IInteractor, IDamageable, ISaveable, ICharacterAnimationData
     {
         [SerializeField] private CharacterConfig _config = new CharacterConfig();
         [SerializeField] private float _maxHealth  = 100f;
@@ -44,6 +45,14 @@ namespace Game.Gameplay.Character
         private float   _stamina;
         private bool    _active;
         private Vector3 _launchVelocity;
+
+        // ICharacterAnimationData
+        public float             MoveSpeed       => _ctx?.MoveSpeed ?? 0f;
+        public float             MaxMoveSpeed    => _config.SprintSpeed;
+        public bool              IsGrounded      => _ctx?.IsGrounded ?? false;
+        public bool              IsCrouching     => _ctx?.CrouchRequested ?? false;
+        public LocomotionStateId LocomotionState => _fsm?.CurrentId ?? LocomotionStateId.Idle;
+        public Vector2           MoveInput       => _ctx != null ? _ctx.Command.MoveAxis : Vector2.zero;
 
         // ICharacterStats
         public float Health     => _health;

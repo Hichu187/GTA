@@ -1,0 +1,19 @@
+fileFormatVersion: 2
+guid: a58e1b6ec91c11f4596b16388d7b89cf
+timeCreated: 1452826916
+licenseType: Store
+MonoImporter:
+  serializedVersion: 2
+  defaultReferences: []
+  executionOrder: 0
+  icon: {instanceID: 0}
+  userData: 
+  assetBundleName: 
+  assetBundleVariant: 
+AssetOrigin:
+  serializedVersion: 1
+  productId: 54604
+  packageName: '"Kawaii Tanks Project" Free version 2.0'
+  packageVersion: 2.0
+  assetPath: Assets/Kawaii_Tanks_Project (Free)/Scripts/GunCamera_Control_Scripts/GunCamera_Control_CS.cs
+  uploadId: 498042

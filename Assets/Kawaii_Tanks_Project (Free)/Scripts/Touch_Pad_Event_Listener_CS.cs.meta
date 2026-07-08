@@ -1,0 +1,18 @@
+fileFormatVersion: 2
+guid: 06dcedc24a053254896e5a8e0ccd2619
+MonoImporter:
+  externalObjects: {}
+  serializedVersion: 2
+  defaultReferences: []
+  executionOrder: 0
+  icon: {instanceID: 0}
+  userData: 
+  assetBundleName: 
+  assetBundleVariant: 
+AssetOrigin:
+  serializedVersion: 1
+  productId: 54604
+  packageName: '"Kawaii Tanks Project" Free version 2.0'
+  packageVersion: 2.0
+  assetPath: Assets/Kawaii_Tanks_Project (Free)/Scripts/Touch_Pad_Event_Listener_CS.cs
+  uploadId: 498042

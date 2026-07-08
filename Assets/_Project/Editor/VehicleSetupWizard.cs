@@ -467,9 +467,8 @@ namespace Game.Editor
             if (rb)
             {
                 rb.mass           = 8000f;
-                rb.linearDamping  = 0.5f;
+                rb.linearDamping  = 0f;
                 rb.angularDamping = 2f;
-                rb.centerOfMass   = new Vector3(0f, -0.5f, 0f);   // lower CoM prevents tipping
             }
 
             if (!go.GetComponent<BoxCollider>())
@@ -478,6 +477,31 @@ namespace Game.Editor
                 col.size   = new Vector3(3.4f, 1.8f, 6.0f);
                 col.center = new Vector3(0f,   0.9f, 0f);
             }
+
+            // WheelColliders — 3 per track (front/mid/rear), Y=0.55 keeps wheels flush at ground level
+            // sideStiffness: outer(front/rear)=0.25 → low friction allows pivot scrub
+            //               center(mid)=1.5       → high friction = pivot anchor point
+            float wY       = 0.55f;
+            float sideOut  = 0.25f;
+            float sideMid  = 1.5f;
+            var wLL = CreateWheelCollider(go.transform, "WheelLL", new Vector3(-1.5f, wY,  2.0f), 0.4f, 0.3f, 1.5f, 80000f, 8000f, sideOut);
+            var wLM = CreateWheelCollider(go.transform, "WheelLM", new Vector3(-1.5f, wY,  0.0f), 0.4f, 0.3f, 1.5f, 80000f, 8000f, sideMid);
+            var wLR = CreateWheelCollider(go.transform, "WheelLR", new Vector3(-1.5f, wY, -2.0f), 0.4f, 0.3f, 1.5f, 80000f, 8000f, sideOut);
+            var wRL = CreateWheelCollider(go.transform, "WheelRL", new Vector3( 1.5f, wY,  2.0f), 0.4f, 0.3f, 1.5f, 80000f, 8000f, sideOut);
+            var wRM = CreateWheelCollider(go.transform, "WheelRM", new Vector3( 1.5f, wY,  0.0f), 0.4f, 0.3f, 1.5f, 80000f, 8000f, sideMid);
+            var wRR = CreateWheelCollider(go.transform, "WheelRR", new Vector3( 1.5f, wY, -2.0f), 0.4f, 0.3f, 1.5f, 80000f, 8000f, sideOut);
+
+            // Visual GO under each WheelCollider — parent your wheel mesh here;
+            // TankController.LateUpdate syncs position/rotation via GetWorldPose each frame.
+            var vLL = CreateChild(wLL.transform, "Visual", Vector3.zero);
+            var vLM = CreateChild(wLM.transform, "Visual", Vector3.zero);
+            var vLR = CreateChild(wLR.transform, "Visual", Vector3.zero);
+            var vRL = CreateChild(wRL.transform, "Visual", Vector3.zero);
+            var vRM = CreateChild(wRM.transform, "Visual", Vector3.zero);
+            var vRR = CreateChild(wRR.transform, "Visual", Vector3.zero);
+
+            // Center of mass — lowered to reduce tipping during high-speed turns
+            var com = CreateChild(go.transform, "CenterOfMass", new Vector3(0f, -0.3f, 0f));
 
             // Turret hierarchy: TurretRoot → BarrelRoot → BarrelTip
             var turretRoot = CreateChild(go.transform, "TurretRoot", new Vector3(0f, 1.8f,  0f));
@@ -492,9 +516,9 @@ namespace Game.Editor
 
             const string hudFolder = "Assets/_Project/Gameplay/Vehicles/Tank/HUD/Prefabs";
             EnsureFolderExists(hudFolder);
-            var speedoPrefab = CreateTMProPrefab<TankSpeedoModule>(hudFolder, "TankSpeedo");
-            var ammoPrefab        = CreateTMProPrefab<TankAmmoModule>(hudFolder,       "TankAmmo");
-            var crosshairPrefab   = CreateImagePrefab<TankCrosshairModule>(hudFolder,  "TankCrosshair");
+            var speedoPrefab       = CreateTMProPrefab<TankSpeedoModule>(hudFolder,      "TankSpeedo");
+            var ammoPrefab         = CreateTMProPrefab<TankAmmoModule>(hudFolder,         "TankAmmo");
+            var crosshairPrefab    = CreateImagePrefab<TankCrosshairModule>(hudFolder,    "TankCrosshair");
             var fireCooldownPrefab = CreateSliderPrefab<TankFireCooldownModule>(hudFolder, "TankFireCooldown");
 
             const string shellFolder = "Assets/_Project/Gameplay/Vehicles/Tank/Projectile/Prefabs";
@@ -502,18 +526,40 @@ namespace Game.Editor
             var shellPrefab = CreateShellPrefab(shellFolder, "TankShell");
 
             var ctrl = go.GetComponent<TankController>();
-            SetField(ctrl, "_enterAnchor", enterAnchor.transform);
-            SetField(ctrl, "_exitAnchor",  exitAnchor.transform);
-            SetField(ctrl, "_turretRoot",  turretRoot.transform);
-            SetField(ctrl, "_barrelRoot",  barrelRoot.transform);
-            SetField(ctrl, "_barrelTip",   barrelTip.transform);
-            SetField(ctrl, "_shellPrefab", shellPrefab);
+            SetField(ctrl, "_enterAnchor",   enterAnchor.transform);
+            SetField(ctrl, "_exitAnchor",    exitAnchor.transform);
+            SetField(ctrl, "_turretRoot",    turretRoot.transform);
+            SetField(ctrl, "_barrelRoot",    barrelRoot.transform);
+            SetField(ctrl, "_barrelTip",     barrelTip.transform);
+            SetField(ctrl, "_shellPrefab",   shellPrefab);
+            SetField(ctrl, "_centerOfMass",  com.transform);
+
+            SetFieldArray(ctrl, "_leftWheels", new Object[]
+            {
+                wLL.GetComponent<WheelCollider>(),
+                wLM.GetComponent<WheelCollider>(),
+                wLR.GetComponent<WheelCollider>(),
+            });
+            SetFieldArray(ctrl, "_rightWheels", new Object[]
+            {
+                wRL.GetComponent<WheelCollider>(),
+                wRM.GetComponent<WheelCollider>(),
+                wRR.GetComponent<WheelCollider>(),
+            });
+            SetFieldArray(ctrl, "_leftWheelMeshes", new Object[]
+            {
+                vLL.transform, vLM.transform, vLR.transform,
+            });
+            SetFieldArray(ctrl, "_rightWheelMeshes", new Object[]
+            {
+                vRL.transform, vRM.transform, vRR.transform,
+            });
 
             var hud = go.GetComponent<TankHUDProvider>();
-            SetField(go.GetComponent<TankCameraProvider>(), "_vcamGameObject",    vcam);
-            SetField(hud, "_speedoPrefab",      speedoPrefab);
-            SetField(hud, "_ammoPrefab",        ammoPrefab);
-            SetField(hud, "_crosshairPrefab",   crosshairPrefab);
+            SetField(go.GetComponent<TankCameraProvider>(), "_vcamGameObject",     vcam);
+            SetField(hud, "_speedoPrefab",       speedoPrefab);
+            SetField(hud, "_ammoPrefab",         ammoPrefab);
+            SetField(hud, "_crosshairPrefab",    crosshairPrefab);
             SetField(hud, "_fireCooldownPrefab", fireCooldownPrefab);
 
             var interactable = EnsureComponent<EnterVehicleInteractable>(go);
@@ -521,9 +567,8 @@ namespace Game.Editor
 
             Finish("Tank",
                 "Attach hull mesh under Tank GO; turret mesh under TurretRoot; barrel mesh under BarrelRoot. " +
-                "Adjust TurretRoot Y to match turret pivot height on your model. " +
+                "Tune WheelCollider Y positions if tank floats or sinks — should be ~0.55 for hull at Y=0. " +
                 "Adjust BarrelTip Z to sit at the muzzle end. " +
-                "Create Input Action Map 'Vehicle_Tank' with: Throttle(1D), Steer(1D), Look(2D), Fire(Btn), Exit(Btn). " +
                 "Place GO on Interactable layer.");
         }
 
@@ -550,7 +595,9 @@ namespace Game.Editor
 
         static GameObject CreateWheelCollider(Transform parent, string name,
                                               Vector3 localPos, float radius, float suspDist,
-                                              float fwdStiffness = 2f)
+                                              float fwdStiffness = 2f,
+                                              float spring = 35000f, float damper = 4500f,
+                                              float sideStiffness = -1f)  // -1 = same as fwdStiffness
         {
             var existing = parent.Find(name);
             if (existing != null) return existing.gameObject;
@@ -564,11 +611,11 @@ namespace Game.Editor
             wc.suspensionDistance = suspDist;
             wc.mass               = 20f;
 
-            var spring = wc.suspensionSpring;
-            spring.spring         = 35000f;
-            spring.damper         = 4500f;
-            spring.targetPosition = 0.5f;
-            wc.suspensionSpring   = spring;
+            var sp = wc.suspensionSpring;
+            sp.spring         = spring;
+            sp.damper         = damper;
+            sp.targetPosition = 0.5f;
+            wc.suspensionSpring = sp;
 
             // Higher stiffness prevents forward spin and lateral slide at speed.
             var fwd = wc.forwardFriction;
@@ -576,7 +623,7 @@ namespace Game.Editor
             wc.forwardFriction = fwd;
 
             var side = wc.sidewaysFriction;
-            side.stiffness      = fwdStiffness;
+            side.stiffness      = sideStiffness < 0f ? fwdStiffness : sideStiffness;
             wc.sidewaysFriction = side;
 
             return go;

@@ -1,0 +1,19 @@
+fileFormatVersion: 2
+guid: 6fca4bdd51a679a459866e9fdc34e12f
+timeCreated: 1449938732
+licenseType: Store
+MonoImporter:
+  serializedVersion: 2
+  defaultReferences: []
+  executionOrder: 0
+  icon: {instanceID: 0}
+  userData: 
+  assetBundleName: 
+  assetBundleVariant: 
+AssetOrigin:
+  serializedVersion: 1
+  productId: 54604
+  packageName: '"Kawaii Tanks Project" Free version 2.0'
+  packageVersion: 2.0
+  assetPath: Assets/Kawaii_Tanks_Project (Free)/Scripts/Camera_Rotate_Scripts/Camera_Rotate_CS.cs
+  uploadId: 498042

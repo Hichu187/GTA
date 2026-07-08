@@ -6,25 +6,37 @@ namespace Game.Gameplay.Vehicles.Tank
     public class TankConfig
     {
         [Header("Drive")]
-        [Tooltip("Force applied forward/backward (N). Tank mass ~8000 kg → needs large values.")]
-        public float DriveForce     = 80000f;
-        [Tooltip("Torque applied for pivot steering (Nm).")]
-        public float TurnTorque     = 60000f;
-        [Tooltip("Max forward speed (km/h).")]
+        [Tooltip("Motor torque per wheel (Nm). 6 wheels × 5000 = 30000 Nm total.")]
+        public float MaxMotorTorque = 5000f;
+        [Tooltip("Brake torque per wheel (Nm) when no input.")]
+        public float MaxBrakeTorque = 15000f;
+        [Tooltip("Supplement Y-axis torque (Nm) for pivot. Friction split handles most of it — keep low.")]
+        public float SteerTorque    = 15000f;
+        [Tooltip("Force (N per m/s of lateral speed) to dampen sideways drift. Lower = more natural sliding in turns.")]
+        public float AntiSlipForce  = 3000f;
+        [Tooltip("Max speed cap (km/h), applied to total velocity magnitude.")]
         public float TopSpeedKmh    = 50f;
 
-        [Header("Stability")]
-        // v_terminal = DriveForce / (mass × LinearDamping). At 80000/(8000×0.5)=20 m/s, capped at TopSpeedKmh.
-        public float LinearDamping  = 0.5f;
+        [Header("Wheel Friction")]
+        [Tooltip("Sideways stiffness for center wheels — high value makes them the pivot anchor point.")]
+        public float CenterWheelSideStiffness = 1.5f;
+        [Tooltip("Sideways stiffness for front/rear outer wheels — low value lets them scrub during pivot.")]
+        public float OuterWheelSideStiffness  = 0.25f;
+
+        [Header("Rigidbody")]
         public float AngularDamping = 2f;
 
         [Header("Turret")]
-        [Tooltip("Turret rotation speed (deg/s).")]
-        public float TurretRotSpeed  = 60f;
+        [Tooltip("Turret rotation speed when following camera (deg/s).")]
+        public float TurretRotSpeed   = 60f;
+        [Tooltip("Seconds of no look input before turret starts resetting to forward.")]
+        public float TurretResetDelay = 1.5f;
+        [Tooltip("Turret rotation speed when resetting to forward (deg/s).")]
+        public float TurretResetSpeed = 25f;
         [Tooltip("Barrel minimum pitch angle (degrees, negative = down).")]
-        public float BarrelPitchMin  = -5f;
+        public float BarrelPitchMin = -5f;
         [Tooltip("Barrel maximum pitch angle (degrees, positive = up).")]
-        public float BarrelPitchMax  = 30f;
+        public float BarrelPitchMax = 30f;
 
         [Header("Cannon")]
         [Tooltip("Seconds between shots.")]

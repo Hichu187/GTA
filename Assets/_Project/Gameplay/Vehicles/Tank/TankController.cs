@@ -22,12 +22,22 @@ namespace Game.Gameplay.Vehicles.Tank
         [Header("Shell")]
         [SerializeField] private GameObject _shellPrefab;
 
+        [Header("Tracks")]
+        [SerializeField] private WheelCollider[] _leftWheels;    // physics colliders, left track
+        [SerializeField] private WheelCollider[] _rightWheels;   // physics colliders, right track
+        [SerializeField] private Transform[]     _leftWheelMeshes;   // visual meshes synced via GetWorldPose
+        [SerializeField] private Transform[]     _rightWheelMeshes;
+
+        [Header("Center of Mass")]
+        [SerializeField] private Transform _centerOfMass;
+
         private TankInputAdapter   _inputAdapter;
         private TankCameraProvider _cameraProvider;
         private TankHUDProvider    _hudProvider;
 
         private float _fireTimer;
         private int   _ammoCount;
+        private float _lookHoldTimer;
 
         // ITankStats
         private float _speedKmh;
@@ -52,14 +62,19 @@ namespace Game.Gameplay.Vehicles.Tank
 
             _rb.isKinematic    = true;
             _rb.angularDamping = _config.AngularDamping;
+
+            if (_centerOfMass != null)
+                _rb.centerOfMass = _centerOfMass.localPosition;
+
+            SetupWheelFriction();
         }
 
         public override void OnPossess(PossessionContext context)
         {
             base.OnPossess(context);
-            bool wasKinematic = _rb.isKinematic;
+            bool wasKinematic  = _rb.isKinematic;
             _rb.isKinematic    = false;
-            _rb.linearDamping  = _config.LinearDamping;
+            _rb.linearDamping  = 0f;
             _rb.angularDamping = _config.AngularDamping;
             if (wasKinematic)
             {
@@ -72,7 +87,9 @@ namespace Game.Gameplay.Vehicles.Tank
         public override void OnUnpossess(PossessionContext context)
         {
             base.OnUnpossess(context);
-            // Leave physics alive — tank coasts to a stop.
+            // Park the tank when player exits
+            ApplyWheels(_leftWheels,  0f, _config.MaxBrakeTorque);
+            ApplyWheels(_rightWheels, 0f, _config.MaxBrakeTorque);
         }
 
         // ── Input / camera ───────────────────────────────────────────────────
@@ -86,34 +103,99 @@ namespace Game.Gameplay.Vehicles.Tank
                 TryFire();
         }
 
-        // ── Physics ──────────────────────────────────────────────────────────
+        // ── Physics (WheelCollider differential drive) ───────────────────────
         protected override void OnOccupiedFixedUpdate()
         {
-            var   cmd         = _inputAdapter.Command;
-            float speedFwd    = Vector3.Dot(_rb.linearVelocity, transform.forward);
-            float topSpeedMs  = _config.TopSpeedKmh / 3.6f;
+            var   cmd      = _inputAdapter.Command;
+            bool  anyInput = Mathf.Abs(cmd.Throttle) > 0.01f || Mathf.Abs(cmd.Steer) > 0.01f;
+            float speedFwd = Vector3.Dot(_rb.linearVelocity, transform.forward);
 
-            // Drive — taper force near top speed; brake when no input
-            if (Mathf.Abs(cmd.Throttle) > 0.01f)
+            // Differential drive: left/right tracks get independent torques
+            // W+D → left faster, right slower → turn right while moving
+            // D only → left forward, right backward → pivot right in place
+            float leftRate  = Mathf.Clamp(cmd.Throttle + cmd.Steer, -1f, 1f);
+            float rightRate = Mathf.Clamp(cmd.Throttle - cmd.Steer, -1f, 1f);
+
+            // Top speed cap on total velocity magnitude (catches diagonal/sliding motion too)
+            float totalSpeedKmh = _rb.linearVelocity.magnitude * 3.6f;
+            if (totalSpeedKmh >= _config.TopSpeedKmh)
             {
-                float speedRatio = Mathf.Clamp01(Mathf.Abs(speedFwd) / topSpeedMs);
-                float force      = cmd.Throttle * _config.DriveForce * (1f - speedRatio * 0.9f);
-                _rb.AddForce(transform.forward * force, ForceMode.Force);
-            }
-            else if (Mathf.Abs(speedFwd) > 0.05f)
-            {
-                // Counter-force to stop naturally when no throttle input
-                _rb.AddForce(-transform.forward * speedFwd * _config.DriveForce * 0.3f, ForceMode.Force);
+                if (leftRate  * speedFwd > 0f) leftRate  = 0f;
+                if (rightRate * speedFwd > 0f) rightRate = 0f;
             }
 
-            // Pivot steer — always active (tank can rotate in place)
+            float motor = anyInput ? _config.MaxMotorTorque : 0f;
+            float brake = anyInput ? 0f                     : _config.MaxBrakeTorque;
+
+            ApplyWheels(_leftWheels,  leftRate  * motor, brake);
+            ApplyWheels(_rightWheels, rightRate * motor, brake);
+
+            // Extra torque to help pivot against WheelCollider sideways friction scrubbing
             if (Mathf.Abs(cmd.Steer) > 0.01f)
-                _rb.AddTorque(Vector3.up * cmd.Steer * _config.TurnTorque, ForceMode.Force);
+                _rb.AddTorque(Vector3.up * cmd.Steer * _config.SteerTorque, ForceMode.Force);
+
+            // Anti-slip: cancel lateral velocity proportionally (doesn't fight pivot, just removes drift)
+            float lateralSpeed = Vector3.Dot(_rb.linearVelocity, transform.right);
+            _rb.AddForce(-transform.right * lateralSpeed * _config.AntiSlipForce, ForceMode.Force);
 
             _speedKmh = speedFwd * 3.6f;
 
             if (_inputAdapter.ConsumeExitPressed())
                 _onExitRequested?.Invoke();
+        }
+
+        // ── Friction setup ────────────────────────────────────────────────────
+        // Center wheel (index 1) = high stiffness → pivot anchor.
+        // Outer wheels (index 0, 2) = low stiffness → scrub freely during pivot.
+        private void SetupWheelFriction()
+        {
+            ApplyFrictionSplit(_leftWheels);
+            ApplyFrictionSplit(_rightWheels);
+        }
+
+        private void ApplyFrictionSplit(WheelCollider[] wheels)
+        {
+            if (wheels == null || wheels.Length == 0) return;
+            int mid = wheels.Length / 2;
+            for (int i = 0; i < wheels.Length; i++)
+            {
+                if (wheels[i] == null) continue;
+                var f = wheels[i].sidewaysFriction;
+                f.stiffness = (i == mid)
+                    ? _config.CenterWheelSideStiffness
+                    : _config.OuterWheelSideStiffness;
+                wheels[i].sidewaysFriction = f;
+            }
+        }
+
+        // Always runs (not just when occupied) so parked tank wheels stay flush with ground.
+        private void LateUpdate()
+        {
+            SyncWheelMeshes(_leftWheels,  _leftWheelMeshes);
+            SyncWheelMeshes(_rightWheels, _rightWheelMeshes);
+        }
+
+        private static void SyncWheelMeshes(WheelCollider[] wheels, Transform[] meshes)
+        {
+            if (wheels == null || meshes == null) return;
+            int n = Mathf.Min(wheels.Length, meshes.Length);
+            for (int i = 0; i < n; i++)
+            {
+                if (wheels[i] == null || meshes[i] == null) continue;
+                wheels[i].GetWorldPose(out Vector3 pos, out Quaternion rot);
+                meshes[i].SetPositionAndRotation(pos, rot);
+            }
+        }
+
+        private static void ApplyWheels(WheelCollider[] wheels, float motorTorque, float brakeTorque)
+        {
+            if (wheels == null) return;
+            foreach (var w in wheels)
+            {
+                if (w == null) continue;
+                w.motorTorque = motorTorque;
+                w.brakeTorque = brakeTorque;
+            }
         }
 
         // ── Turret (after Cinemachine LateUpdate) ────────────────────────────
@@ -124,33 +206,42 @@ namespace Game.Gameplay.Vehicles.Tank
 
         private void RotateTurretToCamera()
         {
-            var aimDir = _cameraProvider.GetAimDirection();
+            bool hasLook = _inputAdapter.Command.Look.sqrMagnitude > 0.001f;
+            if (hasLook)
+                _lookHoldTimer = _config.TurretResetDelay;
+            else
+                _lookHoldTimer -= Time.deltaTime;
 
-            // Turret body — horizontal rotation only
+            bool  following = _lookHoldTimer > 0f;
+            var   aimDir    = following ? _cameraProvider.GetAimDirection() : transform.forward;
+            float rotSpeed  = following ? _config.TurretRotSpeed : _config.TurretResetSpeed;
+
+            // Turret body — horizontal only; returns to tank forward when no look input
             if (_turretRoot != null)
             {
                 var flatDir = new Vector3(aimDir.x, 0f, aimDir.z);
                 if (flatDir.sqrMagnitude > 0.001f)
                 {
-                    var targetRot = Quaternion.LookRotation(flatDir);
                     _turretRoot.rotation = Quaternion.RotateTowards(
-                        _turretRoot.rotation, targetRot,
-                        _config.TurretRotSpeed * Time.deltaTime);
+                        _turretRoot.rotation,
+                        Quaternion.LookRotation(flatDir),
+                        rotSpeed * Time.deltaTime);
                 }
             }
 
-            // Barrel — pitch up/down
+            // Barrel pitch; returns to 0° when no look input
             if (_barrelRoot != null)
             {
-                float pitch      = Mathf.Asin(Mathf.Clamp(aimDir.y, -1f, 1f)) * Mathf.Rad2Deg;
-                pitch            = Mathf.Clamp(pitch, _config.BarrelPitchMin, _config.BarrelPitchMax);
+                float targetPitch = following
+                    ? Mathf.Clamp(Mathf.Asin(Mathf.Clamp(aimDir.y, -1f, 1f)) * Mathf.Rad2Deg,
+                                  _config.BarrelPitchMin, _config.BarrelPitchMax)
+                    : 0f;
 
-                var   localEul   = _barrelRoot.localEulerAngles;
-                float currentX   = localEul.x > 180f ? localEul.x - 360f : localEul.x;
-                float targetX    = -pitch;   // negative because up = negative local X
-                float newX       = Mathf.MoveTowards(currentX, targetX,
-                                       _config.TurretRotSpeed * Time.deltaTime);
-                _barrelRoot.localEulerAngles = new Vector3(newX, localEul.y, localEul.z);
+                var   localEul = _barrelRoot.localEulerAngles;
+                float currentX = localEul.x > 180f ? localEul.x - 360f : localEul.x;
+                _barrelRoot.localEulerAngles = new Vector3(
+                    Mathf.MoveTowards(currentX, -targetPitch, rotSpeed * Time.deltaTime),
+                    localEul.y, localEul.z);
             }
         }
 

@@ -1,0 +1,18 @@
+fileFormatVersion: 2
+guid: ac7e74bcaa1065141970f1d4835722d7
+MonoImporter:
+  externalObjects: {}
+  serializedVersion: 2
+  defaultReferences: []
+  executionOrder: 0
+  icon: {instanceID: 0}
+  userData: 
+  assetBundleName: 
+  assetBundleVariant: 
+AssetOrigin:
+  serializedVersion: 1
+  productId: 54604
+  packageName: '"Kawaii Tanks Project" Free version 2.0'
+  packageVersion: 2.0
+  assetPath: Assets/Kawaii_Tanks_Project (Free)/Scripts/Layer_Settings_CS.cs
+  uploadId: 498042

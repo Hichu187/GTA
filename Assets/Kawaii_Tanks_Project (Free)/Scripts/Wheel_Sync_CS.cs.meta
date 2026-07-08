@@ -1,0 +1,19 @@
+fileFormatVersion: 2
+guid: 08a4a0e4792bcd545baa8671dbd2cf71
+timeCreated: 1449879890
+licenseType: Store
+MonoImporter:
+  serializedVersion: 2
+  defaultReferences: []
+  executionOrder: 0
+  icon: {instanceID: 0}
+  userData: 
+  assetBundleName: 
+  assetBundleVariant: 
+AssetOrigin:
+  serializedVersion: 1
+  productId: 54604
+  packageName: '"Kawaii Tanks Project" Free version 2.0'
+  packageVersion: 2.0
+  assetPath: Assets/Kawaii_Tanks_Project (Free)/Scripts/Wheel_Sync_CS.cs
+  uploadId: 498042

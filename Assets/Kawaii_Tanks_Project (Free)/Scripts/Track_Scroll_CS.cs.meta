@@ -1,0 +1,19 @@
+fileFormatVersion: 2
+guid: a9cba16827c0b4544a8d0a1945f6ee55
+timeCreated: 1449853548
+licenseType: Store
+MonoImporter:
+  serializedVersion: 2
+  defaultReferences: []
+  executionOrder: 0
+  icon: {instanceID: 0}
+  userData: 
+  assetBundleName: 
+  assetBundleVariant: 
+AssetOrigin:
+  serializedVersion: 1
+  productId: 54604
+  packageName: '"Kawaii Tanks Project" Free version 2.0'
+  packageVersion: 2.0
+  assetPath: Assets/Kawaii_Tanks_Project (Free)/Scripts/Track_Scroll_CS.cs
+  uploadId: 498042
