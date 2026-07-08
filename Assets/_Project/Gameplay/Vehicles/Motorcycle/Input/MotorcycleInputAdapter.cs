@@ -3,7 +3,7 @@ using Game.Core.Input;
 
 namespace Game.Gameplay.Vehicles.Motorcycle
 {
-    public class MotorcycleInputAdapter : MonoBehaviour, IInputActionMapProvider
+    public class MotorcycleInputAdapter : MonoBehaviour, IInputActionMapProvider, ILookInjectable
     {
         public string ActionMapName => "Vehicle_Motorcycle";
 
@@ -15,6 +15,8 @@ namespace Game.Gameplay.Vehicles.Motorcycle
 
         public MotorcycleMoveCommand Command =>
             new MotorcycleMoveCommand(_throttle, _brake, _steer, _look);
+
+        public void InjectLook(Vector2 delta) => _look = delta;
 
         public bool ConsumeExitPressed()
         {

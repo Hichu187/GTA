@@ -57,17 +57,22 @@ namespace Game.Gameplay.Vehicles.Car
         public override void OnPossess(PossessionContext context)
         {
             base.OnPossess(context);
-            _rb.linearVelocity  = Vector3.zero;
-            _rb.angularVelocity = Vector3.zero;
-            _rb.isKinematic     = false;
-            _settleFrames       = 4;
+            bool wasKinematic = _rb.isKinematic;
+            _rb.isKinematic = false;
+            if (wasKinematic)
+            {
+                // First possession from parked state — zero physics so WheelColliders can settle.
+                _rb.linearVelocity  = Vector3.zero;
+                _rb.angularVelocity = Vector3.zero;
+                _settleFrames       = 4;
+            }
         }
 
         public override void OnUnpossess(PossessionContext context)
         {
             ResetWheelForces();
             base.OnUnpossess(context);
-            _rb.isKinematic = true;
+            // Leave physics alive — car coasts to a stop naturally via rolling resistance.
             _currentGear = GearState.Neutral;
         }
 

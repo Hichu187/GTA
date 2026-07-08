@@ -27,6 +27,8 @@ namespace Game.Gameplay.Vehicles.Helicopter
         [Header("Helicopter — Rotation")]
         [Tooltip("Yaw rotation speed in air (deg/s).")]
         public float YawSpeed                  = 60f;
+        [Tooltip("Speed at which nose auto-aligns to horizontal velocity direction (deg/s). 0 = off.")]
+        public float AutoYawSpeed              = 90f;
 
         [Header("Helicopter — Visual")]
         [Tooltip("Body tilt angle when moving horizontally (degrees).")]

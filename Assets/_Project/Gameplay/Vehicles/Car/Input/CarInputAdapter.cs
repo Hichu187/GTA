@@ -3,7 +3,7 @@ using Game.Core.Input;
 
 namespace Game.Gameplay.Vehicles.Car
 {
-    public class CarInputAdapter : MonoBehaviour, IInputActionMapProvider
+    public class CarInputAdapter : MonoBehaviour, IInputActionMapProvider, ILookInjectable
     {
         public string ActionMapName => "Vehicle_Car";
 
@@ -16,6 +16,8 @@ namespace Game.Gameplay.Vehicles.Car
 
         public CarMoveCommand Command =>
             new CarMoveCommand(_throttle, _brake, _steer, _look, _hornPressed);
+
+        public void InjectLook(Vector2 delta) => _look = delta;
 
         public bool ConsumeExitPressed()
         {

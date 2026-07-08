@@ -3,7 +3,7 @@ using Game.Core.Input;
 
 namespace Game.Gameplay.Vehicles.Helicopter
 {
-    public class HelicopterInputAdapter : MonoBehaviour, IInputActionMapProvider
+    public class HelicopterInputAdapter : MonoBehaviour, IInputActionMapProvider, ILookInjectable
     {
         public string ActionMapName => "Vehicle_Helicopter";
 
@@ -16,6 +16,8 @@ namespace Game.Gameplay.Vehicles.Helicopter
 
         public HelicopterMoveCommand Command =>
             new HelicopterMoveCommand(_horizontal, _vertical, _yaw, _takeOffPending, _look);
+
+        public void InjectLook(Vector2 delta) => _look = delta;
 
         public bool ConsumeExitPressed()
         {

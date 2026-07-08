@@ -68,7 +68,7 @@ namespace Game.Gameplay.Vehicles.Glider
         public override void OnUnpossess(PossessionContext context)
         {
             base.OnUnpossess(context);
-            _rb.isKinematic = true;
+            // Physics remains active — EndFlight() restores gravity so glider falls.
         }
 
         // ── Air (always in air) ──────────────────────────────────────────────

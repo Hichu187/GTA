@@ -54,16 +54,22 @@ namespace Game.Gameplay.Vehicles.Motorcycle
         public override void OnPossess(PossessionContext context)
         {
             base.OnPossess(context);
+            bool wasKinematic = _rb.isKinematic;
             _rb.isKinematic = false;
+            if (wasKinematic)
+            {
+                _rb.linearVelocity  = Vector3.zero;
+                _rb.angularVelocity = Vector3.zero;
+            }
         }
 
         public override void OnUnpossess(PossessionContext context)
         {
-            // Reset wheel forces before freezing so no phantom torque on next possession.
+            // Reset wheel forces so no phantom torque on next possession.
             if (_rearWheelCollider)  { _rearWheelCollider.motorTorque = 0f;  _rearWheelCollider.brakeTorque = 0f; }
             if (_frontWheelCollider) { _frontWheelCollider.steerAngle = 0f;  _frontWheelCollider.brakeTorque = 0f; }
             base.OnUnpossess(context);
-            _rb.isKinematic = true;
+            // Leave physics alive — motorcycle coasts to a stop naturally via rolling resistance.
         }
 
         protected override void OnOccupiedUpdate()

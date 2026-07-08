@@ -180,11 +180,11 @@
       }
     },
     "com.unity.render-pipelines.universal-config": {
-      "version": "file:com.unity.render-pipelines.universal-config",
+      "version": "17.0.3",
       "depth": 0,
-      "source": "embedded",
+      "source": "builtin",
       "dependencies": {
-        "com.unity.render-pipelines.core": "17.0.1"
+        "com.unity.render-pipelines.core": "17.0.3"
       }
     },
     "com.unity.searcher": {

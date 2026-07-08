@@ -40,9 +40,10 @@ namespace Game.Gameplay.Character
         private InteractAbility       _interactAbility;
         private LocomotionLockAbility _lockAbility;
 
-        private float _health;
-        private float _stamina;
-        private bool  _active;
+        private float   _health;
+        private float   _stamina;
+        private bool    _active;
+        private Vector3 _launchVelocity;
 
         // ICharacterStats
         public float Health     => _health;
@@ -159,6 +160,9 @@ namespace Game.Gameplay.Character
                     context.AnchorPoint.position,
                     context.AnchorPoint.rotation);
 
+            // Inherit horizontal momentum from the vehicle (XZ only — vertical handled by FSM gravity).
+            _launchVelocity = new Vector3(context.ExitVelocity.x, 0f, context.ExitVelocity.z);
+
             _active = true;
             _controller.enabled = true;
             _fsm.Start(_ctx);
@@ -221,7 +225,14 @@ namespace Game.Gameplay.Character
 
             var worldMove = camForward * _ctx.Command.MoveAxis.y
                           + camRight   * _ctx.Command.MoveAxis.x;
-            var motion = worldMove * _ctx.MoveSpeed + Vector3.up * _ctx.VerticalVelocity;
+
+            // Decay exit impulse (15 m/s² deceleration — e.g. 150 km/h tumble stops in ~2.8 s).
+            if (_launchVelocity.sqrMagnitude > 0.01f)
+                _launchVelocity = Vector3.MoveTowards(_launchVelocity, Vector3.zero, 15f * Time.deltaTime);
+            else
+                _launchVelocity = Vector3.zero;
+
+            var motion = worldMove * _ctx.MoveSpeed + Vector3.up * _ctx.VerticalVelocity + _launchVelocity;
             if (_controller.enabled)
                 _controller.Move(motion * Time.deltaTime);
 

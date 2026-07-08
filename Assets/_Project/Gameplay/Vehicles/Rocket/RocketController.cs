@@ -69,7 +69,7 @@ namespace Game.Gameplay.Vehicles.Rocket
         {
             if (_exhaustParticles != null) _exhaustParticles.Stop();
             base.OnUnpossess(context);
-            _rb.isKinematic = true;
+            // Physics remains active — EndFlight() restores gravity so rocket falls.
         }
 
         // ── Air (always) ─────────────────────────────────────────────────────

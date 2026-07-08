@@ -24,13 +24,22 @@ namespace Game.Core.Possession
         /// </summary>
         public readonly System.Action OnExitRequested;
 
+        /// <summary>
+        /// World-space velocity of the previous entity at the moment of exit.
+        /// Passed to the incoming entity so it can inherit momentum (e.g. character tumbles
+        /// when jumping out of a moving vehicle).
+        /// </summary>
+        public readonly Vector3 ExitVelocity;
+
         public PossessionContext(int playerIndex,
-                                 Transform anchorPoint      = null,
-                                 System.Action onExitRequested = null)
+                                 Transform anchorPoint         = null,
+                                 System.Action onExitRequested = null,
+                                 Vector3 exitVelocity          = default)
         {
-            PlayerIndex      = playerIndex;
-            AnchorPoint      = anchorPoint;
-            OnExitRequested  = onExitRequested;
+            PlayerIndex     = playerIndex;
+            AnchorPoint     = anchorPoint;
+            OnExitRequested = onExitRequested;
+            ExitVelocity    = exitVelocity;
         }
 
         public static readonly PossessionContext Default = new PossessionContext(0);

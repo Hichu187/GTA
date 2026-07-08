@@ -3,7 +3,7 @@ using Game.Core.Input;
 
 namespace Game.Gameplay.Vehicles.Rocket
 {
-    public class RocketInputAdapter : MonoBehaviour, IInputActionMapProvider
+    public class RocketInputAdapter : MonoBehaviour, IInputActionMapProvider, ILookInjectable
     {
         public string ActionMapName => "Vehicle_Rocket";
 
@@ -15,6 +15,8 @@ namespace Game.Gameplay.Vehicles.Rocket
 
         public RocketMoveCommand Command =>
             new RocketMoveCommand(_throttle, _pitch, _roll, _look);
+
+        public void InjectLook(Vector2 delta) => _look = delta;
 
         public bool ConsumeExitPressed()
         {

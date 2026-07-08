@@ -5,7 +5,7 @@ using Game.Gameplay.Character.Input;
 
 namespace Game.Gameplay.Character
 {
-    public class CharacterInputAdapter : MonoBehaviour, IInputActionMapProvider
+    public class CharacterInputAdapter : MonoBehaviour, IInputActionMapProvider, ILookInjectable
     {
         public string ActionMapName => "Character";
 
@@ -43,6 +43,9 @@ namespace Game.Gameplay.Character
                 return cmd;
             }
         }
+
+        // Called by LookDragHandler (mobile) to override the look axis each frame.
+        public void InjectLook(Vector2 v) => _look = v;
 
         public bool ConsumeToggleCamera()
         {

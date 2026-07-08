@@ -49,16 +49,23 @@ namespace Game.Gameplay.Vehicles.Helicopter
         public override void OnPossess(PossessionContext context)
         {
             base.OnPossess(context);
-            _rb.isKinematic    = false;
-            _rb.useGravity     = false;   // helicopter manages its own Y via vertical input
+            bool wasKinematic = _rb.isKinematic;
+            _rb.isKinematic     = false;
+            _rb.useGravity      = false;   // helicopter manages its own Y via vertical input
             _horizontalVelocity = Vector3.zero;
             _verticalVelocity   = 0f;
+
+            if (!wasKinematic && !IsNearGround())
+            {
+                // Re-entering while falling — jump straight into air mode.
+                BeginFlight();
+            }
         }
 
         public override void OnUnpossess(PossessionContext context)
         {
-            base.OnUnpossess(context);   // EndFlight if inAir → restores gravity
-            _rb.isKinematic = true;
+            base.OnUnpossess(context);   // EndFlight if inAir → restores gravity so helicopter falls.
+            // No isKinematic — helicopter drops under gravity until it hits ground.
         }
 
         // ── Ground: waiting for TakeOff input ───────────────────────────────
@@ -100,7 +107,7 @@ namespace Game.Gameplay.Vehicles.Helicopter
             var   cmd = _inputAdapter.Command;
             float dt  = Time.fixedDeltaTime;
 
-            // ── Yaw ──────────────────────────────────────────────────────────
+            // ── Manual Yaw ────────────────────────────────────────────────────
             if (Mathf.Abs(cmd.Yaw) > 0.01f)
                 transform.Rotate(Vector3.up, cmd.Yaw * _config.YawSpeed * dt, Space.World);
 
@@ -108,7 +115,6 @@ namespace Game.Gameplay.Vehicles.Helicopter
             Vector3 desiredHorizontal = Vector3.zero;
             if (cmd.Horizontal.magnitude > 0.01f)
             {
-                // Use camera provider's VCam forward for camera-relative direction
                 Vector3 camFwd   = Vector3.ProjectOnPlane(GetCameraForward(), Vector3.up).normalized;
                 Vector3 camRight = Vector3.Cross(Vector3.up, camFwd);
                 desiredHorizontal = (camFwd * cmd.Horizontal.y + camRight * cmd.Horizontal.x).normalized
@@ -118,6 +124,18 @@ namespace Game.Gameplay.Vehicles.Helicopter
             _horizontalVelocity = Vector3.MoveTowards(
                 _horizontalVelocity, desiredHorizontal,
                 (desiredHorizontal.magnitude > 0.01f ? _config.HorizontalAcceleration : _config.HorizontalDeceleration) * dt);
+
+            // ── Auto-yaw: xoay mũi theo hướng bay khi không dùng manual Yaw ──
+            if (_config.AutoYawSpeed > 0f
+                && _horizontalVelocity.sqrMagnitude > 0.25f   // > 0.5 m/s
+                && Mathf.Abs(cmd.Yaw) < 0.05f)
+            {
+                float targetYaw = Mathf.Atan2(_horizontalVelocity.x, _horizontalVelocity.z) * Mathf.Rad2Deg;
+                float yawDiff   = Mathf.DeltaAngle(transform.eulerAngles.y, targetYaw);
+                float step      = Mathf.Sign(yawDiff)
+                                * Mathf.Min(Mathf.Abs(yawDiff), _config.AutoYawSpeed * dt);
+                transform.Rotate(Vector3.up, step, Space.World);
+            }
 
             // ── Vertical movement ─────────────────────────────────────────────
             float desiredVertical = cmd.Vertical * (_config.NormalVerticalSpeedKmh / 3.6f);
@@ -131,16 +149,20 @@ namespace Game.Gameplay.Vehicles.Helicopter
                 _verticalVelocity,
                 _horizontalVelocity.z);
 
-            // ── Visual body tilt from horizontal movement ─────────────────────
-            Vector3 localVel = transform.InverseTransformDirection(_horizontalVelocity);
-            float normalHorizMs = _config.NormalHorizontalSpeedKmh / 3.6f;
-            float speedRatio    = _horizontalVelocity.magnitude / Mathf.Max(normalHorizMs, 0.01f);
-            ApplyPitchVisual( localVel.z > 0f ? -speedRatio * _config.MaxBodyTiltAngle
-                                               :  speedRatio * _config.MaxBodyTiltAngle,
-                              _config.TiltSmooth);
-            ApplyRollVisual( -localVel.x / Mathf.Max(normalHorizMs, 0.01f)
-                              * _config.MaxBodyTiltAngle,
-                              _config.TiltSmooth);
+            // ── Visual body tilt (cần _meshRoot / _rollRoot assign trong Inspector) ──
+            Vector3 localVel    = transform.InverseTransformDirection(_horizontalVelocity);
+            float   normalMs    = _config.NormalHorizontalSpeedKmh / 3.6f;
+            float   speedRatio  = _horizontalVelocity.magnitude / Mathf.Max(normalMs, 0.01f);
+
+            // Pitch: cắm đầu xuống khi tiến (localVel.z > 0), ngẩng lên khi lùi
+            ApplyPitchVisual(localVel.z > 0f
+                ?  speedRatio * _config.MaxBodyTiltAngle
+                : -speedRatio * _config.MaxBodyTiltAngle,
+                _config.TiltSmooth);
+
+            // Roll: nghiêng theo hướng ngang
+            ApplyRollVisual(localVel.x / Mathf.Max(normalMs, 0.01f) * _config.MaxBodyTiltAngle,
+                _config.TiltSmooth);
 
             SpinRotors(1f);
         }
@@ -168,7 +190,8 @@ namespace Game.Gameplay.Vehicles.Helicopter
 
         private Vector3 GetCameraForward()
         {
-            // Fallback to vehicle forward if camera VCam isn't queryable
+            if (Camera.main != null)
+                return Camera.main.transform.forward;
             return transform.forward;
         }
     }

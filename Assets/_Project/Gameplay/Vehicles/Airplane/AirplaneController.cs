@@ -14,6 +14,14 @@ namespace Game.Gameplay.Vehicles.Airplane
     {
         [SerializeField] private AirplaneConfig _config = new AirplaneConfig();
 
+        [Header("Ground Detection")]
+        [Tooltip("Layers counted as ground. Exclude the vehicle's own layer to prevent self-hit.")]
+        [SerializeField] private LayerMask _groundMask = -1;
+
+        [Header("Roll Visual")]
+        [Tooltip("Tick nếu chiều nghiêng cánh bị ngược so với mong muốn.")]
+        [SerializeField] private bool _invertRoll;
+
         [Header("Landing Gear")]
         [SerializeField] private WheelCollider[] _landingGearWheels;
         [SerializeField] private Transform[]     _landingGearMeshes;
@@ -26,20 +34,26 @@ namespace Game.Gameplay.Vehicles.Airplane
         private AirplaneCameraProvider _cameraProvider;
         private AirplaneHUDProvider    _hudProvider;
 
+        // Ground state
         private float _groundSpeed;
-        private float _targetPitch;
-        private float _targetRoll;
 
-        // IAirplaneStats
+        // Air state
+        private float _targetRoll;
+        private float _velocityY;       // explicit vertical velocity — gravity + lift + pitch
+        private float _landingCooldown;
+
+        // ── IAirplaneStats ───────────────────────────────────────────────────────
         public float SpeedKmh    => _currentSpeed * 3.6f;
         public float AltitudeM   => transform.position.y;
         public float HeadingDeg  => (transform.eulerAngles.y + 360f) % 360f;
         public float ThrottlePct => _inputAdapter != null ? _inputAdapter.Command.Throttle * 100f : 0f;
 
-        // IPossessable
+        // ── IPossessable ─────────────────────────────────────────────────────────
         public override ICameraContextProvider  CameraProvider => _cameraProvider;
         public override IHUDContextProvider     HUDProvider    => _hudProvider;
         public override IInputActionMapProvider InputProvider  => _inputAdapter;
+
+        // ────────────────────────────────────────────────────────────────────────
 
         protected override void Awake()
         {
@@ -54,21 +68,31 @@ namespace Game.Gameplay.Vehicles.Airplane
         public override void OnPossess(PossessionContext context)
         {
             base.OnPossess(context);
-            _rb.isKinematic = false;
-            _rb.useGravity  = true;
-            _groundSpeed    = 0f;
-            _targetPitch    = 0f;
-            _targetRoll     = 0f;
+            bool wasKinematic = _rb.isKinematic;
+            _rb.isKinematic  = false;
+            _rb.useGravity   = true;
+            _groundSpeed     = 0f;
+            _targetRoll      = 0f;
+            _velocityY       = 0f;
+            _landingCooldown = 0f;
+
+            // Re-possess mid-air (e.g. player exits and re-enters a flying plane)
+            if (!wasKinematic && !IsNearGround())
+            {
+                _currentSpeed = new Vector3(_rb.linearVelocity.x, 0f, _rb.linearVelocity.z).magnitude;
+                _velocityY    = _rb.linearVelocity.y;
+                BeginFlight();
+            }
         }
 
         public override void OnUnpossess(PossessionContext context)
         {
             ResetLandingGear();
             base.OnUnpossess(context);
-            _rb.isKinematic = true;
+            // EndFlight (called by base when _inAir) restores gravity so plane falls.
         }
 
-        // ── Ground ──────────────────────────────────────────────────────────
+        // ── Ground ──────────────────────────────────────────────────────────────
 
         protected override void OnGroundUpdate()
         {
@@ -78,24 +102,24 @@ namespace Game.Gameplay.Vehicles.Airplane
 
         protected override void OnGroundFixedUpdate()
         {
-            var cmd = _inputAdapter.Command;
+            var   cmd = _inputAdapter.Command;
+            float dt  = Time.fixedDeltaTime;
 
-            // Throttle → accelerate; Brake → decelerate faster; coast → slow roll
             if (cmd.Throttle > 0.01f)
                 _groundSpeed = Mathf.MoveTowards(_groundSpeed, _config.GroundTopSpeedKmh / 3.6f,
-                    _config.GroundAcceleration * Time.fixedDeltaTime);
+                    _config.GroundAcceleration * dt);
             else if (cmd.Brake)
                 _groundSpeed = Mathf.MoveTowards(_groundSpeed, 0f,
-                    _config.GroundAcceleration * _config.BrakeFriction * Time.fixedDeltaTime);
+                    _config.GroundAcceleration * _config.BrakeFriction * dt);
             else
                 _groundSpeed = Mathf.MoveTowards(_groundSpeed, 0f,
-                    _config.GroundAcceleration * 0.4f * Time.fixedDeltaTime);
+                    _config.GroundAcceleration * 0.4f * dt);
 
-            // Ground steering
+            // Rudder steering on ground
             if (Mathf.Abs(cmd.Yaw) > 0.01f)
-                transform.Rotate(Vector3.up, cmd.Yaw * 40f * Time.fixedDeltaTime, Space.World);
+                transform.Rotate(Vector3.up, cmd.Yaw * 40f * dt, Space.World);
 
-            // Drive wheels via velocity (WheelColliders still provide ground contact)
+            // Velocity override — keep physics Y so WheelColliders handle ground contact
             _rb.linearVelocity = new Vector3(
                 transform.forward.x * _groundSpeed,
                 _rb.linearVelocity.y,
@@ -104,15 +128,17 @@ namespace Game.Gameplay.Vehicles.Airplane
             SyncLandingGear();
             SpinPropeller(cmd.Throttle);
 
-            // Auto-takeoff
+            // Auto-takeoff when runway speed reached
             if (_groundSpeed >= _config.TakeoffSpeedKmh / 3.6f)
             {
-                _currentSpeed = _groundSpeed;
+                _currentSpeed    = _groundSpeed;
+                _velocityY       = 0f;
+                _landingCooldown = _config.TakeoffCooldown;
                 BeginFlight();
             }
         }
 
-        // ── Air ─────────────────────────────────────────────────────────────
+        // ── Air ─────────────────────────────────────────────────────────────────
 
         protected override void OnAirUpdate()
         {
@@ -125,59 +151,129 @@ namespace Game.Gameplay.Vehicles.Airplane
             var   cmd = _inputAdapter.Command;
             float dt  = Time.fixedDeltaTime;
 
-            // ── Speed ────────────────────────────────────────────────────────
+            if (_landingCooldown > 0f) _landingCooldown -= dt;
+
+            // ── 1. Forward speed ─────────────────────────────────────────────────
+            //   Throttle  → accelerate toward target
+            //   Brake     → decelerate fast
+            //   No input  → coast (hold current speed)
             if (cmd.Throttle > 0.01f)
             {
-                float target = Mathf.Lerp(_config.NormalFlySpeedKmh, _config.MaxFlySpeedKmh, cmd.Throttle) / 3.6f;
+                float target = Mathf.Lerp(
+                    _config.NormalFlySpeedKmh,
+                    _config.MaxFlySpeedKmh,
+                    cmd.Throttle) / 3.6f;
                 _currentSpeed = Mathf.MoveTowards(_currentSpeed, target, _config.FlyAcceleration * dt);
             }
-            else
-                _currentSpeed = Mathf.MoveTowards(_currentSpeed, 0f, _config.FlyDeceleration * dt);
+            else if (cmd.Brake)
+            {
+                _currentSpeed = Mathf.MoveTowards(_currentSpeed, 0f,
+                    _config.FlyDeceleration * _config.BrakeFriction * dt);
+            }
 
-            // ── Pitch / Roll (accumulate visual angles) ───────────────────────
-            _targetPitch += cmd.Pitch * _config.PitchSpeed * dt;
-            _targetPitch  = Mathf.Clamp(_targetPitch, -_config.MaxPitchAngle, _config.MaxPitchAngle);
-            _targetRoll  -= cmd.Roll * _config.RollSpeed * dt;
-            _targetRoll   = Mathf.Clamp(_targetRoll, -_config.MaxRollAngle, _config.MaxRollAngle);
-
-            // Neutral return when no input
-            if (Mathf.Abs(cmd.Pitch) < 0.01f)
-                _targetPitch = Mathf.MoveTowards(_targetPitch, 0f, _config.PitchSpeed * 0.4f * dt);
+            // ── 2. Roll accumulation ─────────────────────────────────────────────
+            //   Left input  → roll left (negative)
+            //   Right input → roll right (positive)
+            //   No input    → auto-level
+            _targetRoll += cmd.Roll * _config.RollSpeed * dt;
+            _targetRoll  = Mathf.Clamp(_targetRoll, -_config.MaxRollAngle, _config.MaxRollAngle);
             if (Mathf.Abs(cmd.Roll) < 0.01f)
-                _targetRoll  = Mathf.MoveTowards(_targetRoll,  0f, _config.RollSpeed  * 0.4f * dt);
+                _targetRoll = Mathf.MoveTowards(_targetRoll, 0f, _config.RollSpeed * 0.5f * dt);
 
-            // ── Visual tilt ──────────────────────────────────────────────────
-            ApplyPitchVisual(_targetPitch, _config.PitchSmooth);
-            ApplyRollVisual(_targetRoll,   _config.RollSmooth);
+            // ── 3. Yaw from banking + manual rudder ──────────────────────────────
+            float rollFrac = _targetRoll / _config.MaxRollAngle;
+            float yawDelta = rollFrac   * _config.TurningSpeed * dt
+                           + cmd.Yaw   * _config.YawSpeed      * dt;
+            transform.Rotate(Vector3.up, yawDelta, Space.World);
 
-            // ── World turn: roll banks into yaw turn; Yaw input adds directly ─
-            float rollFraction = _targetRoll / _config.MaxRollAngle;
-            float yawAdd       = cmd.Yaw * _config.YawSpeed * dt;
-            ApplyYawTurn(rollFraction + yawAdd, 0f, _config.TurningSpeed);
+            // ── 4. Vertical velocity — gravity, lift, stall, pitch ───────────────
+            //
+            //   liftRatio: how much lift the current speed generates
+            //     0   = no speed  → full gravity, free fall
+            //     0.5 = half stall → half gravity
+            //     1+  = at or above TakeoffSpeed → full lift, level flight
+            //
+            //   Pitch button:
+            //     UP(cmd.Pitch=-1) → _velocityY = +ClimbSpeed (climb)
+            //     DN(cmd.Pitch=+1) → _velocityY = -ClimbSpeed (descend)
+            //     No pitch         → gravity simulation accumulates
 
-            // ── Velocity override ─────────────────────────────────────────────
-            SetFlightVelocity(FlightForward, _currentSpeed);
+            float stallSpeed = _config.TakeoffSpeedKmh / 3.6f;
+            float liftRatio  = Mathf.Clamp01(_currentSpeed / stallSpeed);
 
+            if (Mathf.Abs(cmd.Pitch) > 0.01f)
+            {
+                // Pitch button: direct vertical control
+                _velocityY = -cmd.Pitch * _config.ClimbSpeed;
+            }
+            else if (cmd.Brake)
+            {
+                // Braking: speed loss = lift loss = altitude loss
+                //   brakeSink scales with current speed (fast = more lift being bled off)
+                //   At cruise (60 m/s): sink up to ClimbSpeed * 0.5 = 7.5 m/s downward
+                //   At stall (<25 m/s): brakeSink → 0, stall gravity dominates
+                _velocityY += Physics.gravity.y * (1f - liftRatio) * dt;  // stall gravity still active
+
+                float brakeSink = Mathf.Clamp01(_currentSpeed / (_config.NormalFlySpeedKmh / 3.6f))
+                                * _config.ClimbSpeed * 0.5f;
+                if (_velocityY > -brakeSink)
+                    _velocityY = Mathf.MoveTowards(_velocityY, -brakeSink, _config.ClimbSpeed * dt);
+
+                _velocityY = Mathf.Clamp(_velocityY, -_config.StallFallSpeed, _config.ClimbSpeed);
+            }
+            else
+            {
+                // No pitch, no brake: gravity vs lift
+                // At liftRatio=1 (≥TakeoffSpeed): netGrav=0 → level flight
+                // At liftRatio=0 (speed=0):       netGrav=-9.81 → free fall
+                float netGrav = Physics.gravity.y * (1f - liftRatio);
+                _velocityY += netGrav * dt;
+
+                if (liftRatio >= 1f)
+                    _velocityY = Mathf.MoveTowards(_velocityY, 0f, 20f * dt);
+
+                _velocityY = Mathf.Clamp(_velocityY, -_config.StallFallSpeed, _config.ClimbSpeed);
+            }
+
+            // ── 5. Apply velocity override ───────────────────────────────────────
+            Vector3 hDir = new Vector3(transform.forward.x, 0f, transform.forward.z).normalized;
+            _rb.linearVelocity = hDir * _currentSpeed + Vector3.up * _velocityY;
+
+            // ── 6. Visual tilt + propeller ───────────────────────────────────────
+            ApplyPitchVisual(cmd.Pitch * _config.MaxPitchAngle, _config.PitchSmooth);
+            ApplyRollVisual(_invertRoll ? -_targetRoll : _targetRoll, _config.RollSmooth);
             SpinPropeller(cmd.Throttle);
 
-            // ── Auto-land ────────────────────────────────────────────────────
-            if (cmd.Brake && IsNearGround())
+            // ── 7. Landing check ─────────────────────────────────────────────────
+            //   Gated by cooldown to prevent re-land immediately after takeoff.
+            //   Triggers when:
+            //     a) Descending fast enough (natural stall touchdown), OR
+            //     b) Player holds Brake near ground (intentional land)
+            if (_landingCooldown <= 0f && IsNearGround())
             {
-                _groundSpeed = _currentSpeed;
-                EndFlight();
+                if (_velocityY < -_config.LandingDescendSpeed || cmd.Brake)
+                {
+                    _groundSpeed = _currentSpeed;   // carry forward speed into ground roll
+                    _velocityY   = 0f;
+                    EndFlight();
+                }
             }
         }
 
-        // ── Helpers ──────────────────────────────────────────────────────────
+        // ── Helpers ─────────────────────────────────────────────────────────────
 
+        // Ray origin raised 1 m above pivot to avoid self-collision with own colliders.
         private bool IsNearGround() =>
-            Physics.Raycast(transform.position, Vector3.down, _config.LandingHeight + 1f);
+            Physics.Raycast(
+                transform.position + Vector3.up,
+                Vector3.down,
+                _config.LandingHeight + 1f,
+                _groundMask);
 
         private void SpinPropeller(float throttle)
         {
             if (_propeller == null || throttle < 0.01f) return;
-            _propeller.Rotate(Vector3.forward,
-                throttle * _propellerSpinSpeed * Time.fixedDeltaTime, Space.Self);
+            _propeller.Rotate(Vector3.forward, throttle * _propellerSpinSpeed * Time.fixedDeltaTime, Space.Self);
         }
 
         private void SyncLandingGear()
@@ -185,11 +281,10 @@ namespace Game.Gameplay.Vehicles.Airplane
             if (_landingGearWheels == null) return;
             for (int i = 0; i < _landingGearWheels.Length; i++)
             {
-                var w = _landingGearWheels[i];
-                if (w == null) continue;
+                if (_landingGearWheels[i] == null) continue;
                 if (_landingGearMeshes != null && i < _landingGearMeshes.Length && _landingGearMeshes[i] != null)
                 {
-                    w.GetWorldPose(out Vector3 pos, out Quaternion rot);
+                    _landingGearWheels[i].GetWorldPose(out Vector3 pos, out Quaternion rot);
                     _landingGearMeshes[i].SetPositionAndRotation(pos, rot);
                 }
             }

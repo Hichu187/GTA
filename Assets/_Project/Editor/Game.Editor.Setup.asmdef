@@ -14,9 +14,12 @@
         "Game.Gameplay.Vehicles.Helicopter",
         "Game.Gameplay.Vehicles.Glider",
         "Game.Gameplay.Vehicles.Rocket",
-        "Game.Gameplay.Interactables"
+        "Game.Gameplay.Interactables",
+        "Unity.InputSystem"
     ],
-    "includePlatforms": ["Editor"],
+    "includePlatforms": [
+        "Editor"
+    ],
     "excludePlatforms": [],
     "allowUnsafeCode": false,
     "overrideReferences": false,

@@ -22,8 +22,14 @@ namespace Game.Services
         {
             if (target == null || ReferenceEquals(target, _current)) return;
 
+            // Capture velocity BEFORE OnUnpossess so the receiving entity can inherit momentum.
+            Vector3 exitVelocity = Vector3.zero;
             if (_current != null)
             {
+                var rb = (_current as MonoBehaviour)?.GetComponent<Rigidbody>();
+                if (rb != null && !rb.isKinematic)
+                    exitVelocity = rb.linearVelocity;
+
                 _current.CameraProvider.CameraRigChanged -= OnCameraRigChanged;
                 _current.OnUnpossess(new PossessionContext(0, target.EnterAnchor));
             }
@@ -35,7 +41,8 @@ namespace Game.Services
             target.OnPossess(new PossessionContext(
                 playerIndex:     0,
                 anchorPoint:     _previous?.ExitAnchor,
-                onExitRequested: PossessPrevious));
+                onExitRequested: PossessPrevious,
+                exitVelocity:    exitVelocity));
 
             target.InputProvider.BindActions(_inputManager);
             _cameraManager.ApplyContext(target.CameraProvider);

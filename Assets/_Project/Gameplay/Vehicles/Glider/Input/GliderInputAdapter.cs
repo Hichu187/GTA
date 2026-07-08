@@ -3,7 +3,7 @@ using Game.Core.Input;
 
 namespace Game.Gameplay.Vehicles.Glider
 {
-    public class GliderInputAdapter : MonoBehaviour, IInputActionMapProvider
+    public class GliderInputAdapter : MonoBehaviour, IInputActionMapProvider, ILookInjectable
     {
         public string ActionMapName => "Vehicle_Glider";
 
@@ -15,6 +15,8 @@ namespace Game.Gameplay.Vehicles.Glider
 
         public GliderMoveCommand Command =>
             new GliderMoveCommand(_pitch, _roll, _brake, _look);
+
+        public void InjectLook(Vector2 delta) => _look = delta;
 
         public bool ConsumeExitPressed()
         {

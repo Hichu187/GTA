@@ -1,6 +1,7 @@
 using System.Collections.Generic;
 using UnityEngine;
 using Game.Core.HUD;
+using Game.Core.Input;
 using Game.Core.Weapons;
 using Game.Gameplay.Character.Stats;
 
@@ -15,6 +16,9 @@ namespace Game.Gameplay.Character
         [Header("Weapon HUD (auto-used when WeaponHolder is present)")]
         [SerializeField] private GameObject _weaponAmmoPrefab;
         [SerializeField] private GameObject _weaponNamePrefab;
+
+        [Header("Mobile Controls (optional — assign prefab only on mobile builds)")]
+        [SerializeField] private GameObject _mobileControlsPrefab;
 
         public ICharacterStats StatsSource { get; set; }
 
@@ -41,6 +45,9 @@ namespace Game.Gameplay.Character
                 if (_weaponNamePrefab != null)
                     modules.Add(new HUDModuleHandle("WeaponName", _weaponNamePrefab, _weaponHolder));
             }
+
+            if (_mobileControlsPrefab != null)
+                modules.Add(new HUDModuleHandle("MobileControls", _mobileControlsPrefab, GetComponent<ILookInjectable>()));
 
             return modules;
         }

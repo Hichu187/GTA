@@ -3,7 +3,7 @@ using Game.Core.Input;
 
 namespace Game.Gameplay.Vehicles.Airplane
 {
-    public class AirplaneInputAdapter : MonoBehaviour, IInputActionMapProvider
+    public class AirplaneInputAdapter : MonoBehaviour, IInputActionMapProvider, ILookInjectable
     {
         public string ActionMapName => "Vehicle_Airplane";
 
@@ -17,6 +17,8 @@ namespace Game.Gameplay.Vehicles.Airplane
 
         public AirplaneMoveCommand Command =>
             new AirplaneMoveCommand(_throttle, _pitch, _roll, _yaw, _brake, _look);
+
+        public void InjectLook(Vector2 delta) => _look = delta;
 
         public bool ConsumeExitPressed()
         {
