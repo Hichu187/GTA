@@ -27,12 +27,8 @@ namespace Game.Gameplay.Vehicles.Tank
         public float AngularDamping = 2f;
 
         [Header("Turret")]
-        [Tooltip("Turret rotation speed when following camera (deg/s).")]
-        public float TurretRotSpeed   = 60f;
-        [Tooltip("Seconds of no look input before turret starts resetting to forward.")]
-        public float TurretResetDelay = 1.5f;
-        [Tooltip("Turret rotation speed when resetting to forward (deg/s).")]
-        public float TurretResetSpeed = 25f;
+        [Tooltip("Turret/barrel rotation speed following camera (deg/s).")]
+        public float TurretRotSpeed = 90f;
         [Tooltip("Barrel minimum pitch angle (degrees, negative = down).")]
         public float BarrelPitchMin = -5f;
         [Tooltip("Barrel maximum pitch angle (degrees, positive = up).")]

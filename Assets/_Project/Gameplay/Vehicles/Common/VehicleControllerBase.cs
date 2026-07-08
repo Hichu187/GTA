@@ -49,11 +49,13 @@ namespace Game.Gameplay.Vehicles.Common
 
         private void LateUpdate()
         {
+            OnAlwaysLateUpdate();
             if (IsOccupied) OnOccupiedLateUpdate();
         }
 
         protected virtual void OnOccupiedUpdate() { }
         protected virtual void OnOccupiedFixedUpdate() { }
+        protected virtual void OnAlwaysLateUpdate() { }
 
         // Called after camera finishes updating — ideal for turret/bone alignment.
         protected virtual void OnOccupiedLateUpdate() { }

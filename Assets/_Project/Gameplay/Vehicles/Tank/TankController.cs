@@ -37,7 +37,6 @@ namespace Game.Gameplay.Vehicles.Tank
 
         private float _fireTimer;
         private int   _ammoCount;
-        private float _lookHoldTimer;
 
         // ITankStats
         private float _speedKmh;
@@ -168,8 +167,7 @@ namespace Game.Gameplay.Vehicles.Tank
             }
         }
 
-        // Always runs (not just when occupied) so parked tank wheels stay flush with ground.
-        private void LateUpdate()
+        protected override void OnAlwaysLateUpdate()
         {
             SyncWheelMeshes(_leftWheels,  _leftWheelMeshes);
             SyncWheelMeshes(_rightWheels, _rightWheelMeshes);
@@ -206,42 +204,34 @@ namespace Game.Gameplay.Vehicles.Tank
 
         private void RotateTurretToCamera()
         {
-            bool hasLook = _inputAdapter.Command.Look.sqrMagnitude > 0.001f;
-            if (hasLook)
-                _lookHoldTimer = _config.TurretResetDelay;
-            else
-                _lookHoldTimer -= Time.deltaTime;
+            var   aimDir   = _cameraProvider.GetAimDirection();
+            float rotSpeed = _config.TurretRotSpeed;
 
-            bool  following = _lookHoldTimer > 0f;
-            var   aimDir    = following ? _cameraProvider.GetAimDirection() : transform.forward;
-            float rotSpeed  = following ? _config.TurretRotSpeed : _config.TurretResetSpeed;
-
-            // Turret body — horizontal only; returns to tank forward when no look input
+            // Project aimDir into tank's local XZ plane → turret yaw relative to tank body
             if (_turretRoot != null)
             {
-                var flatDir = new Vector3(aimDir.x, 0f, aimDir.z);
-                if (flatDir.sqrMagnitude > 0.001f)
+                var localDir = transform.InverseTransformDirection(aimDir);
+                localDir.y = 0f;
+                if (localDir.sqrMagnitude > 0.001f)
                 {
-                    _turretRoot.rotation = Quaternion.RotateTowards(
-                        _turretRoot.rotation,
-                        Quaternion.LookRotation(flatDir),
+                    _turretRoot.localRotation = Quaternion.RotateTowards(
+                        _turretRoot.localRotation,
+                        Quaternion.LookRotation(localDir.normalized),
                         rotSpeed * Time.deltaTime);
                 }
             }
 
-            // Barrel pitch; returns to 0° when no look input
+            // Barrel pitch in turret-local space
             if (_barrelRoot != null)
             {
-                float targetPitch = following
-                    ? Mathf.Clamp(Mathf.Asin(Mathf.Clamp(aimDir.y, -1f, 1f)) * Mathf.Rad2Deg,
-                                  _config.BarrelPitchMin, _config.BarrelPitchMax)
-                    : 0f;
+                float targetPitch = Mathf.Clamp(
+                    Mathf.Asin(Mathf.Clamp(aimDir.y, -1f, 1f)) * Mathf.Rad2Deg,
+                    _config.BarrelPitchMin, _config.BarrelPitchMax);
 
-                var   localEul = _barrelRoot.localEulerAngles;
-                float currentX = localEul.x > 180f ? localEul.x - 360f : localEul.x;
-                _barrelRoot.localEulerAngles = new Vector3(
-                    Mathf.MoveTowards(currentX, -targetPitch, rotSpeed * Time.deltaTime),
-                    localEul.y, localEul.z);
+                _barrelRoot.localRotation = Quaternion.RotateTowards(
+                    _barrelRoot.localRotation,
+                    Quaternion.Euler(-targetPitch, 0f, 0f),
+                    rotSpeed * Time.deltaTime);
             }
         }
 
