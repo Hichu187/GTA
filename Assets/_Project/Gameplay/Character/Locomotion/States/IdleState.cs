@@ -13,7 +13,7 @@ namespace Game.Gameplay.Character.Locomotion.States
         public LocomotionStateId Update(LocomotionContext ctx)
         {
             if (ctx.IsGrounded) ctx.VerticalVelocity = -2f;
-            else return LocomotionStateId.Fall;
+            if (!ctx.IsEffectivelyGrounded) return LocomotionStateId.Fall;
 
             if (ctx.CrouchRequested) return LocomotionStateId.Crouch;
             if (ctx.Command.JumpPressed)   return LocomotionStateId.Jump;

@@ -11,7 +11,7 @@ namespace Game.Gameplay.Character
 
         private Vector2 _move;
         private Vector2 _look;
-        private bool    _jumpPressed;
+        private bool    _jumpPending;
         private bool    _sprintHeld;
         private bool    _crouchPressed;
         private bool    _crouchPending;
@@ -26,8 +26,16 @@ namespace Game.Gameplay.Character
         private float _switchDelta;
         private bool  _throwPending;
 
-        public CharacterMoveCommand Command => new CharacterMoveCommand(
-            _move, _look, _jumpPressed, _sprintHeld, _crouchPressed, _interactPressed);
+        public CharacterMoveCommand Command
+        {
+            get
+            {
+                var cmd = new CharacterMoveCommand(
+                    _move, _look, _jumpPending, _sprintHeld, _crouchPressed, _interactPressed);
+                _jumpPending = false;   // one-shot: consume after read
+                return cmd;
+            }
+        }
 
         public WeaponCommand WeaponCommand
         {
@@ -79,8 +87,7 @@ namespace Game.Gameplay.Character
                 onCanceled:  () => _look = Vector2.zero);
 
             binder.BindButton("Jump",
-                onStarted:   () => _jumpPressed   = true,
-                onCanceled:  () => _jumpPressed   = false);
+                onStarted:   () => _jumpPending = true);
 
             binder.BindButton("Sprint",
                 onStarted:   () => _sprintHeld    = true,

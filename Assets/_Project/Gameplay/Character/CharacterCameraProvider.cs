@@ -41,15 +41,23 @@ namespace Game.Gameplay.Character
             if (_current == CameraMode.ThirdPerson && _tpOrbital != null)
             {
                 _tpOrbital.HorizontalAxis.Value += lookAxis.x * _sensitivity;
-                _tpOrbital.VerticalAxis.Value   += lookAxis.y * _sensitivity;
+
+                var vAxis = _tpOrbital.VerticalAxis;
+                _tpOrbital.VerticalAxis.Value = Mathf.Clamp(
+                    vAxis.Value + lookAxis.y * _sensitivity,
+                    vAxis.Range.x, vAxis.Range.y);
             }
             else if (_current == CameraMode.FirstPerson && _fpPanTilt != null)
             {
                 // Horizontal pan is baked into Character body rotation (see ConsumeFPBodyYawDelta).
                 // PanTilt only handles vertical tilt to avoid double-rotation with the body.
-                _pendingFPYaw         = lookAxis.x * _sensitivity;
-                _fpPanTilt.PanAxis.Value  = 0f;
-                _fpPanTilt.TiltAxis.Value -= lookAxis.y * _sensitivity;
+                _pendingFPYaw            = lookAxis.x * _sensitivity;
+                _fpPanTilt.PanAxis.Value = 0f;
+
+                var tAxis = _fpPanTilt.TiltAxis;
+                _fpPanTilt.TiltAxis.Value = Mathf.Clamp(
+                    tAxis.Value - lookAxis.y * _sensitivity,
+                    tAxis.Range.x, tAxis.Range.y);
             }
         }
 

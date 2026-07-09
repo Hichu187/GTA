@@ -2,6 +2,7 @@ using UnityEngine;
 using Game.Core.Camera;
 using Game.Core.HUD;
 using Game.Core.Input;
+using Game.Core;
 using Game.Core.Possession;
 using Game.Gameplay.Vehicles.Common;
 
@@ -10,7 +11,7 @@ namespace Game.Gameplay.Vehicles.Car
     [RequireComponent(typeof(CarInputAdapter))]
     [RequireComponent(typeof(CarCameraProvider))]
     [RequireComponent(typeof(CarHUDProvider))]
-    public class CarController : VehicleControllerBase, ICarStats
+    public class CarController : VehicleControllerBase, ICarStats, IVehicleRiderSource
     {
         [SerializeField] private CarConfig _config = new CarConfig();
 
@@ -248,5 +249,8 @@ namespace Game.Gameplay.Vehicles.Car
             col.GetWorldPose(out Vector3 pos, out Quaternion rot);
             mesh.SetPositionAndRotation(pos, rot);
         }
+
+        // IVehicleRiderSource
+        public VehicleRiderData GetRiderData() => new VehicleRiderData { HideCharacter = _config.HideCharacter };
     }
 }

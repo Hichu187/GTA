@@ -30,6 +30,10 @@ namespace Game.Gameplay.Vehicles.Car
             new Keyframe(120f, 0.20f),
             new Keyframe(200f, 0.10f));
 
+        [Header("Rider")]
+        [Tooltip("Hide the character model when inside this vehicle. Disable for open-cockpit or cage-free vehicles.")]
+        public bool HideCharacter = true;
+
         [Header("Stability")]
         [Tooltip("Anti-roll bar force (N). Prevents body from rolling over in corners.")]
         public float AntiRollForce  = 8000f;

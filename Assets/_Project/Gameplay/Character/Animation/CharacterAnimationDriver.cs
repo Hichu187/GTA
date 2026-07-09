@@ -37,16 +37,28 @@ namespace Game.Gameplay.Character.Animation
         {
             if (_source == null || _animator == null) return;
 
+            if (!_source.IsAnimationActive)
+            {
+                // Character is in a vehicle or unpossessed — freeze at idle/grounded
+                _animator.SetFloat(_hashSpeed,      0f);
+                _animator.SetFloat(_hashMoveX,      0f);
+                _animator.SetFloat(_hashMoveY,      0f);
+                _animator.SetBool(_hashIsGrounded,  true);
+                _animator.SetBool(_hashIsCrouching, false);
+                _prevState = LocomotionStateId.Idle;
+                return;
+            }
+
             float dt = Time.deltaTime;
 
-            // Speed normalized to [0,1] where 1 = sprint speed
             float speedNorm = _source.MaxMoveSpeed > 0f
                 ? _source.MoveSpeed / _source.MaxMoveSpeed
                 : 0f;
 
-            _animator.SetFloat(_hashSpeed,      speedNorm,           _speedDampTime, dt);
-            _animator.SetFloat(_hashMoveX,      _source.MoveInput.x, _inputDampTime, dt);
-            _animator.SetFloat(_hashMoveY,      _source.MoveInput.y, _inputDampTime, dt);
+            var scaledInput = _source.MoveInput * speedNorm;
+            _animator.SetFloat(_hashSpeed,  speedNorm,        _speedDampTime, dt);
+            _animator.SetFloat(_hashMoveX,  scaledInput.x,    _inputDampTime, dt);
+            _animator.SetFloat(_hashMoveY,  scaledInput.y,    _inputDampTime, dt);
             _animator.SetBool(_hashIsGrounded,  _source.IsGrounded);
             _animator.SetBool(_hashIsCrouching, _source.IsCrouching);
 

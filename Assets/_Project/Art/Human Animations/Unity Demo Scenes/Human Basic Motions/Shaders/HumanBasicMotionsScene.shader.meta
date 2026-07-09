@@ -9,9 +9,8 @@ ShaderImporter:
   assetBundleVariant: 
 AssetOrigin:
   serializedVersion: 1
-  productId: 154271
-  packageName: Human Basic Motions FREE
-  packageVersion: 2.4.2
-  assetPath: Assets/Kevin Iglesias/Human Animations/Unity Demo Scenes/Human Basic
-    Motions/Shaders/HumanBasicMotionsScene.shader
-  uploadId: 908942
+  productId: 157744
+  packageName: Human Basic Motions
+  packageVersion: 2.5.1
+  assetPath: Assets/_Project/Art/Human Animations/Unity Demo Scenes/Human Basic Motions/Shaders/HumanBasicMotionsScene.shader
+  uploadId: 908876

@@ -6,5 +6,6 @@ namespace Game.Core.Weapons
         Melee,
         Explosion,
         Fire,
+        Fall,
     }
 }

@@ -38,6 +38,14 @@ namespace Game.Gameplay.Vehicles.Motorcycle
         [Tooltip("Speed (deg/s) at which target lean returns to upright when steering is released. Lower = smoother return.")]
         public float LeanReturnSpeed = 120f;
 
+        [Header("Drivetrain")]
+        [Tooltip("Crankset rotation speed (degrees per second per km/h). 10 = 300 deg/s at 30 km/h.")]
+        public float CranksetDegreesPerKmh = 10f;
+
+        [Header("Rider")]
+        [Tooltip("Keep false for bikes — character stays visible and IK anchors limbs to the bike.")]
+        public bool HideCharacter = false;
+
         [Header("Aerodynamics")]
         [Tooltip("Air drag coefficient. linearDamping = speed * AirResistance + MinDamping.")]
         public float AirResistance = 0.002f;

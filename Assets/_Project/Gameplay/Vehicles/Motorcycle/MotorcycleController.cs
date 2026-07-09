@@ -2,6 +2,7 @@ using UnityEngine;
 using Game.Core.Camera;
 using Game.Core.HUD;
 using Game.Core.Input;
+using Game.Core;
 using Game.Core.Possession;
 using Game.Gameplay.Vehicles.Common;
 
@@ -10,7 +11,7 @@ namespace Game.Gameplay.Vehicles.Motorcycle
     [RequireComponent(typeof(MotorcycleInputAdapter))]
     [RequireComponent(typeof(MotorcycleCameraProvider))]
     [RequireComponent(typeof(MotorcycleHUDProvider))]
-    public class MotorcycleController : VehicleControllerBase, IMotorcycleStats
+    public class MotorcycleController : VehicleControllerBase, IMotorcycleStats, IVehicleRiderSource, IVehicleRiderState
     {
         [SerializeField] private MotorcycleConfig _config = new MotorcycleConfig();
 
@@ -23,16 +24,56 @@ namespace Game.Gameplay.Vehicles.Motorcycle
         [Header("Visuals")]
         [SerializeField] private Transform _handlerBar;   // optional — rotates with steer
 
+        [Header("Drivetrain")]
+        [Tooltip("Crankset axle — rotates around local X proportional to speed.")]
+        [SerializeField] private Transform _crankset;
+        [Tooltip("Left pedal — parented to crankset, counter-rotates to stay level.")]
+        [SerializeField] private Transform _leftPedal;
+        [Tooltip("Right pedal — parented to crankset, counter-rotates to stay level.")]
+        [SerializeField] private Transform _rightPedal;
+
+        [Header("Rider IK Anchors")]
+        [Tooltip("Left foot peg — IK pins character's left foot here while riding.")]
+        [SerializeField] private Transform _leftFootPeg;
+        [Tooltip("Right foot peg — IK pins character's right foot here while riding.")]
+        [SerializeField] private Transform _rightFootPeg;
+        [Tooltip("Left ground stand — where character's left foot touches the ground when stopped.")]
+        [SerializeField] private Transform _leftStandTarget;
+        [Tooltip("Right ground stand — where character's right foot touches the ground when stopped.")]
+        [SerializeField] private Transform _rightStandTarget;
+        [Tooltip("Left handlebar grip — optional IK anchor for character's left hand.")]
+        [SerializeField] private Transform _leftHandGrip;
+        [Tooltip("Right handlebar grip — optional IK anchor for character's right hand.")]
+        [SerializeField] private Transform _rightHandGrip;
+        [Tooltip("Left knee hint — empty placed in front of the left knee to guide bend direction.")]
+        [SerializeField] private Transform _leftKneeHint;
+        [Tooltip("Right knee hint — empty placed in front of the right knee to guide bend direction.")]
+        [SerializeField] private Transform _rightKneeHint;
+        [Tooltip("Left elbow hint — empty placed behind/outside the left elbow.")]
+        [SerializeField] private Transform _leftElbowHint;
+        [Tooltip("Right elbow hint — empty placed behind/outside the right elbow.")]
+        [SerializeField] private Transform _rightElbowHint;
+        [Tooltip("Point the spine leans toward while riding. Leave empty to auto-use midpoint of hand grips.")]
+        [SerializeField] private Transform _spineLookTarget;
+        [Tooltip("Hip anchor — place at pelvis height on the seat. Forces body position so arms can reach the handlebar.")]
+        [SerializeField] private Transform _seatAnchor;
+
         private MotorcycleInputAdapter   _inputAdapter;
         private MotorcycleCameraProvider _cameraProvider;
         private MotorcycleHUDProvider    _hudProvider;
         private float                    _smoothedTargetLean;
+        private Quaternion               _handlerBarInitRot;
 
         // IMotorcycleStats
         private float _speedKmh;
         private float _rpm = 800f;
         public  float SpeedKmh => _speedKmh;
         public  float RPM      => _rpm;
+
+        // IVehicleRiderState
+        public bool  IsMoving    => Mathf.Abs(_speedKmh) > 1f;
+        public bool  TiltToRight => WrapAngle(transform.eulerAngles.z) <= 0f;
+        public float SpeedNorm   => Mathf.Clamp01(Mathf.Abs(_speedKmh) / _config.TopSpeedKmh);
 
         // IPossessable
         public override ICameraContextProvider  CameraProvider => _cameraProvider;
@@ -49,6 +90,8 @@ namespace Game.Gameplay.Vehicles.Motorcycle
 
             SetupCenterOfMass();
             _rb.isKinematic = true;
+
+            _handlerBarInitRot = _handlerBar != null ? _handlerBar.localRotation : Quaternion.identity;
         }
 
         public override void OnPossess(PossessionContext context)
@@ -99,7 +142,7 @@ namespace Game.Gameplay.Vehicles.Motorcycle
 
                 if (_handlerBar != null)
                     _handlerBar.localRotation =
-                        Quaternion.Euler(0f, _frontWheelCollider.steerAngle, 0f);
+                        _handlerBarInitRot * Quaternion.Euler(0f, _frontWheelCollider.steerAngle, 0f);
             }
 
             // ── Aerodynamics ─────────────────────────────────────────────────
@@ -112,6 +155,9 @@ namespace Game.Gameplay.Vehicles.Motorcycle
             // ── Wheel mesh sync ───────────────────────────────────────────────
             SyncWheelMesh(_frontWheelCollider, _frontWheelMesh);
             SyncWheelMesh(_rearWheelCollider,  _rearWheelMesh);
+
+            // ── Crankset + pedals ─────────────────────────────────────────────
+            UpdateCrankset(speedFwd);
 
             // ── HUD stats ─────────────────────────────────────────────────────
             _speedKmh = speedFwd * 3.6f;
@@ -215,6 +261,41 @@ namespace Game.Gameplay.Vehicles.Motorcycle
                    + _frontWheelCollider.transform.localPosition.z) * 0.5f;
             com.y = -0.2f;
             _rb.centerOfMass = com;
+        }
+
+        // IVehicleRiderSource
+        public VehicleRiderData GetRiderData() => new VehicleRiderData
+        {
+            HideCharacter    = _config.HideCharacter,
+            LeftFootTarget   = _leftFootPeg,
+            RightFootTarget  = _rightFootPeg,
+            LeftStandTarget  = _leftStandTarget,
+            RightStandTarget = _rightStandTarget,
+            LeftHandTarget   = _leftHandGrip,
+            RightHandTarget  = _rightHandGrip,
+            LeftKneeHint     = _leftKneeHint,
+            RightKneeHint    = _rightKneeHint,
+            LeftElbowHint    = _leftElbowHint,
+            RightElbowHint   = _rightElbowHint,
+            SpineLookTarget  = _spineLookTarget,
+            SeatAnchor       = _seatAnchor,
+            StateSource      = this,
+        };
+
+        private void UpdateCrankset(float speedFwd)
+        {
+            if (_crankset == null) return;
+
+            // delta in degrees this fixed frame; sign follows drive direction
+            float delta = speedFwd * 3.6f * _config.CranksetDegreesPerKmh * Time.fixedDeltaTime;
+            var spin = Quaternion.Euler(delta, 0f, 0f);
+
+            _crankset.localRotation *= spin;
+
+            // Pedals are children of the crankset; counter-rotate so they stay level.
+            var counterSpin = Quaternion.Euler(-delta, 0f, 0f);
+            if (_leftPedal  != null) _leftPedal.localRotation  *= counterSpin;
+            if (_rightPedal != null) _rightPedal.localRotation *= counterSpin;
         }
 
         private static void SyncWheelMesh(WheelCollider col, Transform mesh)

@@ -31,6 +31,12 @@ namespace Game.Gameplay.Character.Locomotion
         public void Tick(LocomotionContext ctx)
         {
             ctx.StateTimer += Time.deltaTime;
+
+            if (ctx.IsGrounded)
+                ctx.GroundGraceTimer = ctx.Config.SlopeGraceDuration;
+            else
+                ctx.GroundGraceTimer = Mathf.Max(0f, ctx.GroundGraceTimer - Time.deltaTime);
+
             var next = _current.Update(ctx);
             if (next != LocomotionStateId.Self && next != CurrentId)
                 Transition(next, ctx);

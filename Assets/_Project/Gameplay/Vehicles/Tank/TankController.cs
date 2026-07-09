@@ -256,6 +256,7 @@ namespace Game.Gameplay.Vehicles.Tank
 
             _fireTimer = _config.FireCooldown;
             if (_ammoCount > 0) _ammoCount--;
+            _cameraProvider.TriggerFireShake();
         }
     }
 }

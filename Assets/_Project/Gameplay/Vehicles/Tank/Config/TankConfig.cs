@@ -5,6 +5,10 @@ namespace Game.Gameplay.Vehicles.Tank
     [System.Serializable]
     public class TankConfig
     {
+        [Header("Rider")]
+        [Tooltip("Hide the character model when inside this vehicle.")]
+        public bool HideCharacter = true;
+
         [Header("Drive")]
         [Tooltip("Motor torque per wheel (Nm). 6 wheels × 5000 = 30000 Nm total.")]
         public float MaxMotorTorque = 5000f;

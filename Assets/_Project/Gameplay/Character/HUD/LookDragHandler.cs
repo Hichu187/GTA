@@ -12,6 +12,7 @@ namespace Game.Gameplay.Character.HUD
     {
         [Header("Tuning")]
         [SerializeField] private float _sensitivity      = 0.05f;
+        [SerializeField] private bool  _invertX          = false;
         [SerializeField] private bool  _invertY          = true;
         [SerializeField] private float _deadZone         = 3f;    // pixels
         [SerializeField] private float _maxDeltaPerFrame = 80f;   // pixels, 0 = no clamp
@@ -69,6 +70,7 @@ namespace Game.Gameplay.Character.HUD
             if (_maxDeltaPerFrame > 0f)
                 delta = Vector2.ClampMagnitude(delta, _maxDeltaPerFrame);
 
+            if (_invertX) delta.x = -delta.x;
             if (_invertY) delta.y = -delta.y;
 
             _adapter?.InjectLook(delta * _sensitivity);

@@ -10,11 +10,13 @@ namespace Game.Gameplay.Character.Locomotion.States
 
         public LocomotionStateId Update(LocomotionContext ctx)
         {
+            ctx.MoveSpeed = 0f;  // hold movement lock for full land duration
+
             if (ctx.StateTimer < ctx.Config.LandDuration) return LocomotionStateId.Self;
 
             var mag = ctx.Command.MoveAxis.magnitude;
-            if (mag < 0.01f)                                        return LocomotionStateId.Idle;
-            if (ctx.Command.SprintHeld)                             return LocomotionStateId.Sprint;
+            if (mag < 0.01f)                              return LocomotionStateId.Idle;
+            if (ctx.Command.SprintHeld)                   return LocomotionStateId.Sprint;
             return mag > ctx.Config.RunThreshold ? LocomotionStateId.Run : LocomotionStateId.Walk;
         }
 

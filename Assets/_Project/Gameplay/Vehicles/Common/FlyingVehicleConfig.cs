@@ -5,6 +5,10 @@ namespace Game.Gameplay.Vehicles.Common
     [System.Serializable]
     public class FlyingVehicleConfig
     {
+        [Header("Rider")]
+        [Tooltip("Hide the character model when inside this vehicle.")]
+        public bool HideCharacter = true;
+
         [Header("Ground")]
         [Tooltip("Acceleration on ground (m/s²).")]
         public float GroundAcceleration  = 20f;
