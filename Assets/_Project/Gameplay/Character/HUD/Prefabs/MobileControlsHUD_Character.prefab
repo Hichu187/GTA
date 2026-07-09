@@ -1318,7 +1318,7 @@ MonoBehaviour:
   m_EditorClassIdentifier: Game.Gameplay.Character::Game.Gameplay.Character.HUD.LookDragHandler
   _sensitivity: 0.05
   _invertX: 0
-  _invertY: 0
+  _invertY: 1
   _deadZone: 3
   _maxDeltaPerFrame: 80
   _disableInEditor: 0
