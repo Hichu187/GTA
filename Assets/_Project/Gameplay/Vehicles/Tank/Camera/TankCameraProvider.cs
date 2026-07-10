@@ -19,16 +19,11 @@ namespace Game.Gameplay.Vehicles.Tank
         [SerializeField] private float _defaultVertical = 15f;
 
         [Header("Fire Shake")]
-        [SerializeField] private float _shakeAmplitude  = 3f;    // degrees of vertical kick
-        [SerializeField] private float _shakeDuration   = 0.35f; // seconds
-        [SerializeField] private float _shakeFrequency  = 18f;   // oscillations per second
+        [SerializeField] private CinemachineImpulseSource _impulseSource;
+        [SerializeField] private float _shakeForce = 1f;
 
         private CinemachineOrbitalFollow _orbital;
         private float _lookHoldTimer;
-
-        // Manual shake state
-        private float _shakeTimer;
-        private float _prevShakeOffset; // delta applied last frame — subtracted next frame
 
         public event System.Action CameraRigChanged;
 
@@ -40,29 +35,7 @@ namespace Game.Gameplay.Vehicles.Tank
 
         public void TriggerFireShake()
         {
-            _shakeTimer = _shakeDuration;
-        }
-
-        private void Update()
-        {
-            if (_orbital == null) return;
-
-            // Undo last frame's shake so the base axis value stays clean
-            _orbital.VerticalAxis.Value -= _prevShakeOffset;
-
-            if (_shakeTimer > 0f)
-            {
-                _shakeTimer -= Time.deltaTime;
-                float t = Mathf.Clamp01(_shakeTimer / _shakeDuration); // 1 → 0
-                _prevShakeOffset = Mathf.Sin(Time.time * _shakeFrequency) * _shakeAmplitude * t;
-                _orbital.VerticalAxis.Value = Mathf.Clamp(
-                    _orbital.VerticalAxis.Value + _prevShakeOffset,
-                    _verticalMin, _verticalMax);
-            }
-            else
-            {
-                _prevShakeOffset = 0f;
-            }
+            _impulseSource?.GenerateImpulseWithForce(_shakeForce);
         }
 
         public void HandleLook(Vector2 look)
