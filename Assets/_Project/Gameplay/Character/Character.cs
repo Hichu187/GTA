@@ -161,7 +161,7 @@ namespace Game.Gameplay.Character
                 .ToArray();
             SetRagdollActive(false);
 
-            _vehicleRider    = gameObject.AddComponent<CharacterVehicleRider>();
+            _vehicleRider    = GetComponent<CharacterVehicleRider>() ?? gameObject.AddComponent<CharacterVehicleRider>();
             _abilitySystem   = gameObject.AddComponent<AbilitySystem>();
             _crouchAbility   = new CrouchAbility();
             _interactAbility = new InteractAbility(_interactionDetector, this);

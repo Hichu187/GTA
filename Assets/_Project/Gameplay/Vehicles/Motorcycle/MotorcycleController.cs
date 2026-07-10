@@ -1,4 +1,5 @@
 using UnityEngine;
+using UnityEngine.Scripting;
 using Game.Core.Camera;
 using Game.Core.HUD;
 using Game.Core.Input;
@@ -13,7 +14,7 @@ namespace Game.Gameplay.Vehicles.Motorcycle
     [RequireComponent(typeof(MotorcycleHUDProvider))]
     public class MotorcycleController : VehicleControllerBase, IMotorcycleStats, IVehicleRiderSource, IVehicleRiderState
     {
-        [SerializeField] private MotorcycleConfig _config = new MotorcycleConfig();
+        [SerializeField] private TwoWheelConfig _config = new TwoWheelConfig();
 
         [Header("Wheels")]
         [SerializeField] private WheelCollider _frontWheelCollider;
@@ -22,47 +23,34 @@ namespace Game.Gameplay.Vehicles.Motorcycle
         [SerializeField] private Transform     _rearWheelMesh;
 
         [Header("Visuals")]
-        [SerializeField] private Transform _handlerBar;   // optional — rotates with steer
+        [SerializeField] private Transform _handlerBar;
 
         [Header("Drivetrain")]
-        [Tooltip("Crankset axle — rotates around local X proportional to speed.")]
         [SerializeField] private Transform _crankset;
-        [Tooltip("Left pedal — parented to crankset, counter-rotates to stay level.")]
         [SerializeField] private Transform _leftPedal;
-        [Tooltip("Right pedal — parented to crankset, counter-rotates to stay level.")]
         [SerializeField] private Transform _rightPedal;
 
         [Header("Rider IK Anchors")]
-        [Tooltip("Left foot peg — IK pins character's left foot here while riding.")]
         [SerializeField] private Transform _leftFootPeg;
-        [Tooltip("Right foot peg — IK pins character's right foot here while riding.")]
         [SerializeField] private Transform _rightFootPeg;
-        [Tooltip("Left ground stand — where character's left foot touches the ground when stopped.")]
         [SerializeField] private Transform _leftStandTarget;
-        [Tooltip("Right ground stand — where character's right foot touches the ground when stopped.")]
         [SerializeField] private Transform _rightStandTarget;
-        [Tooltip("Left handlebar grip — optional IK anchor for character's left hand.")]
         [SerializeField] private Transform _leftHandGrip;
-        [Tooltip("Right handlebar grip — optional IK anchor for character's right hand.")]
         [SerializeField] private Transform _rightHandGrip;
-        [Tooltip("Left knee hint — empty placed in front of the left knee to guide bend direction.")]
         [SerializeField] private Transform _leftKneeHint;
-        [Tooltip("Right knee hint — empty placed in front of the right knee to guide bend direction.")]
         [SerializeField] private Transform _rightKneeHint;
-        [Tooltip("Left elbow hint — empty placed behind/outside the left elbow.")]
         [SerializeField] private Transform _leftElbowHint;
-        [Tooltip("Right elbow hint — empty placed behind/outside the right elbow.")]
         [SerializeField] private Transform _rightElbowHint;
-        [Tooltip("Point the spine leans toward while riding. Leave empty to auto-use midpoint of hand grips.")]
         [SerializeField] private Transform _spineLookTarget;
-        [Tooltip("Hip anchor — place at pelvis height on the seat. Forces body position so arms can reach the handlebar.")]
         [SerializeField] private Transform _seatAnchor;
 
         private MotorcycleInputAdapter   _inputAdapter;
         private MotorcycleCameraProvider _cameraProvider;
         private MotorcycleHUDProvider    _hudProvider;
-        private float                    _smoothedTargetLean;
-        private Quaternion               _handlerBarInitRot;
+
+        private float      _currentSteerAngle;
+        private float      _currentLeanAngle;
+        private Quaternion _handleBarInitRot;
 
         // IMotorcycleStats
         private float _speedKmh;
@@ -80,6 +68,8 @@ namespace Game.Gameplay.Vehicles.Motorcycle
         public override IHUDContextProvider     HUDProvider    => _hudProvider;
         public override IInputActionMapProvider InputProvider  => _inputAdapter;
 
+        // ── Lifecycle ─────────────────────────────────────────────────────────
+
         protected override void Awake()
         {
             base.Awake();
@@ -88,10 +78,11 @@ namespace Game.Gameplay.Vehicles.Motorcycle
             _hudProvider    = GetComponent<MotorcycleHUDProvider>();
             _hudProvider.StatsSource = this;
 
-            SetupCenterOfMass();
-            _rb.isKinematic = true;
+            _rb.isKinematic   = true;
+            _handleBarInitRot = _handlerBar != null ? _handlerBar.localRotation : Quaternion.identity;
 
-            _handlerBarInitRot = _handlerBar != null ? _handlerBar.localRotation : Quaternion.identity;
+            SetupWheels();
+            SetupCenterOfMass();
         }
 
         public override void OnPossess(PossessionContext context)
@@ -108,11 +99,10 @@ namespace Game.Gameplay.Vehicles.Motorcycle
 
         public override void OnUnpossess(PossessionContext context)
         {
-            // Reset wheel forces so no phantom torque on next possession.
             if (_rearWheelCollider)  { _rearWheelCollider.motorTorque = 0f;  _rearWheelCollider.brakeTorque = 0f; }
             if (_frontWheelCollider) { _frontWheelCollider.steerAngle = 0f;  _frontWheelCollider.brakeTorque = 0f; }
+            _rb.constraints = RigidbodyConstraints.None;
             base.OnUnpossess(context);
-            // Leave physics alive — motorcycle coasts to a stop naturally via rolling resistance.
         }
 
         protected override void OnOccupiedUpdate()
@@ -122,148 +112,169 @@ namespace Game.Gameplay.Vehicles.Motorcycle
 
         protected override void OnOccupiedFixedUpdate()
         {
-            var   cmd      = _inputAdapter.Command;
-            float speedFwd = Vector3.Dot(_rb.linearVelocity, transform.forward);
-            float speedKmh = speedFwd * 3.6f;
-            float speed    = _rb.linearVelocity.magnitude;
+            var cmd = _inputAdapter.Command;
 
-            // Steer factor from AnimationCurve: 1.0 at standstill → ~0.1 at 100+ km/h
-            float steerFactor = _config.SteerRestrictionCurve.Evaluate(Mathf.Abs(speedKmh));
+            HandleDrive(cmd.Throttle, cmd.Brake);
+            HandleSteering(cmd.Steer);
+            LeanOnTurnLocal();
+            ConstrainRotation(IsOnGround());
 
-            // ── Drive / Brake / Reverse ───────────────────────────────────────
-            ApplyDrive(cmd, speedFwd, steerFactor);
+            SyncHandleBar();
+            SyncWheelMesh(_frontWheelCollider, _frontWheelMesh);
+            SyncWheelMesh(_rearWheelCollider,  _rearWheelMesh);
+            UpdateCrankset();
 
-            // ── Steer (AnimationCurve restricted, smoothed) ───────────────────
-            float targetSteer = cmd.Steer * _config.MaxSteerAngle * steerFactor;
-            if (_frontWheelCollider)
-            {
-                _frontWheelCollider.steerAngle = Mathf.Lerp(
-                    _frontWheelCollider.steerAngle, targetSteer, _config.SteerSmooth);
-
-                if (_handlerBar != null)
-                    _handlerBar.localRotation =
-                        _handlerBarInitRot * Quaternion.Euler(0f, _frontWheelCollider.steerAngle, 0f);
-            }
-
-            // ── Aerodynamics ─────────────────────────────────────────────────
+            float speedFwd     = Vector3.Dot(_rb.linearVelocity, transform.forward);
+            float speed        = _rb.linearVelocity.magnitude;
+            _speedKmh          = speedFwd * 3.6f;
+            _rpm               = Mathf.Lerp(800f, 8000f, Mathf.Clamp01(Mathf.Abs(speedFwd) / (_config.TopSpeedKmh / 3.6f)));
             _rb.linearDamping  = speed * _config.AirResistance + _config.MinDamping;
             _rb.angularDamping = _config.AngularStability + speed * 0.05f;
 
-            // ── Lean (PD torque controller) ───────────────────────────────────
-            ApplyLean(cmd, speed, steerFactor);
-
-            // ── Wheel mesh sync ───────────────────────────────────────────────
-            SyncWheelMesh(_frontWheelCollider, _frontWheelMesh);
-            SyncWheelMesh(_rearWheelCollider,  _rearWheelMesh);
-
-            // ── Crankset + pedals ─────────────────────────────────────────────
-            UpdateCrankset(speedFwd);
-
-            // ── HUD stats ─────────────────────────────────────────────────────
-            _speedKmh = speedFwd * 3.6f;
-            _rpm      = Mathf.Lerp(800f, 8000f,
-                            Mathf.Clamp01(Mathf.Abs(speedFwd) / (_config.TopSpeedKmh / 3.6f)));
-
-            // ── Exit ─────────────────────────────────────────────────────────
             if (_inputAdapter.ConsumeExitPressed())
                 _onExitRequested?.Invoke();
         }
 
-        private void ApplyDrive(MotorcycleMoveCommand cmd, float speedFwd, float steerFactor)
+        // ── Drive ─────────────────────────────────────────────────────────────
+
+        private void HandleDrive(float throttle, float brake)
         {
             if (_rearWheelCollider == null) return;
+            float speedFwd = Vector3.Dot(_rb.linearVelocity, transform.forward);
 
-            if (cmd.Throttle > 0.01f)
+            if (throttle > 0.01f)
             {
-                // Forward — taper motor torque near top speed so it doesn't overshoot
-                float speedRatio  = Mathf.Clamp01(speedFwd / (_config.TopSpeedKmh / 3.6f));
-                float tapered     = cmd.Throttle * _config.MotorTorque * (1f - speedRatio);
-                _rearWheelCollider.motorTorque  = tapered > 5f ? tapered : 0f;
-                _rearWheelCollider.brakeTorque  = 0f;
+                float speedRatio = Mathf.Clamp01(speedFwd / (_config.TopSpeedKmh / 3.6f));
+                float tapered    = throttle * _config.MotorForce * (1f - speedRatio);
+                _rearWheelCollider.motorTorque = tapered > 5f ? tapered : 0f;
+                _rearWheelCollider.brakeTorque = 0f;
                 if (_frontWheelCollider) _frontWheelCollider.brakeTorque = 0f;
             }
-            else if (cmd.Brake > 0.01f)
+            else if (brake > 0.01f)
             {
                 if (speedFwd > 0.5f)
                 {
-                    // Moving forward → brake
-                    _rearWheelCollider.motorTorque  = 0f;
-                    _rearWheelCollider.brakeTorque  = cmd.Brake * _config.BrakeTorque;
+                    _rearWheelCollider.motorTorque = 0f;
+                    _rearWheelCollider.brakeTorque = brake * _config.BrakeForce * _config.RearBrakePower;
                     if (_frontWheelCollider)
-                        _frontWheelCollider.brakeTorque = cmd.Brake * _config.BrakeTorque * 0.5f;
+                        _frontWheelCollider.brakeTorque = brake * _config.BrakeForce * _config.FrontBrakePower;
                 }
                 else if (speedFwd > -(_config.ReverseSpeedKmh / 3.6f))
                 {
-                    // Slow/stopped → reverse (40% of motor torque, negative)
-                    _rearWheelCollider.brakeTorque  = 0f;
+                    _rearWheelCollider.brakeTorque = 0f;
                     if (_frontWheelCollider) _frontWheelCollider.brakeTorque = 0f;
-                    _rearWheelCollider.motorTorque  = -cmd.Brake * _config.MotorTorque * 0.4f;
+                    _rearWheelCollider.motorTorque = -brake * _config.MotorForce * 0.4f;
                 }
                 else
                 {
-                    // At max reverse speed → coast
-                    _rearWheelCollider.motorTorque  = 0f;
-                    _rearWheelCollider.brakeTorque  = 0f;
+                    _rearWheelCollider.motorTorque = 0f;
+                    _rearWheelCollider.brakeTorque = 0f;
                 }
             }
             else
             {
-                // Coast — air resistance (linearDamping) decelerates naturally
-                _rearWheelCollider.motorTorque  = 0f;
-                _rearWheelCollider.brakeTorque  = 0f;
+                _rearWheelCollider.motorTorque = 0f;
+                _rearWheelCollider.brakeTorque = 0f;
                 if (_frontWheelCollider) _frontWheelCollider.brakeTorque = 0f;
             }
         }
 
-        private void ApplyLean(MotorcycleMoveCommand cmd, float speed, float steerFactor)
+        // ── Steering ──────────────────────────────────────────────────────────
+
+        private void HandleSteering(float steerInput)
         {
-            bool isGrounded = (_frontWheelCollider != null && _frontWheelCollider.isGrounded)
-                           || (_rearWheelCollider  != null && _rearWheelCollider.isGrounded);
+            float t        = Mathf.Clamp01(_rb.linearVelocity.magnitude / (_config.TopSpeedKmh / 3.6f)) * _config.SteerReductorAmount;
+            float maxSteer = Mathf.LerpAngle(_config.MaxSteerAngle, _config.MinSteerAngle, t);
+            // × 0.1f matches BicycleSystem convention: TurnSmoothing is 0–1 as a percentage
+            _currentSteerAngle = Mathf.Lerp(_currentSteerAngle, maxSteer * steerInput, _config.TurnSmoothing * 0.1f);
+            if (_frontWheelCollider) _frontWheelCollider.steerAngle = _currentSteerAngle;
+        }
 
-            float desiredLean = isGrounded
-                ? -cmd.Steer * _config.MaxLeanAngle * steerFactor
-                : 0f;
+        // ── Lean (direct transform — no physics torque) ───────────────────────
+        // Inspired by BicycleVehicle.LeanOnTurnLocal().
+        // FreezeRotationZ on ground hands lean control entirely to us.
 
-            // Smooth the target so releasing the steer doesn't cause an instant large error.
-            _smoothedTargetLean = Mathf.MoveTowards(
-                _smoothedTargetLean, desiredLean,
-                _config.LeanReturnSpeed * Time.fixedDeltaTime);
+        private void LeanOnTurnLocal()
+        {
+            Vector3 localRot = transform.localEulerAngles;
+            float   speed    = _rb.linearVelocity.magnitude;
+            float   smooth   = _config.LeanSmoothing * 0.1f;
 
-            float targetLean = _smoothedTargetLean;
-
-            float currentLean = WrapAngle(transform.eulerAngles.z);
-            float leanError   = targetLean - currentLean;
-
-            // Angular velocity around local forward (Z) axis = roll rate
-            float rollRate = Vector3.Dot(_rb.angularVelocity, transform.forward);
-
-            // PD controller: proportional error + derivative damping
-            float leanTorque = leanError * _config.LeanTorque
-                             - rollRate  * _config.LeanDamping;
-
-            _rb.AddRelativeTorque(new Vector3(0f, 0f, leanTorque), ForceMode.Acceleration);
-
-            // At very low speed, bias toward upright so the bike doesn't tip from physics noise
-            if (speed < 1.5f)
+            if (speed < 2f)
             {
-                float uprightBias = -currentLean * _config.LeanTorque * 0.4f
-                                  - rollRate     * _config.LeanDamping;
-                _rb.AddRelativeTorque(new Vector3(0f, 0f, uprightBias), ForceMode.Acceleration);
+                _currentLeanAngle = Mathf.LerpAngle(localRot.z, 0f, 0.05f);
             }
+            else if (_currentSteerAngle < 0.5f && _currentSteerAngle > -0.5f)
+            {
+                _currentLeanAngle = Mathf.LerpAngle(localRot.z, 0f, smooth);
+            }
+            else
+            {
+                float t          = Mathf.Clamp01(Mathf.Abs(_currentSteerAngle) / Mathf.Max(_config.MaxSteerAngle, 0.01f));
+                float targetLean = -Mathf.Sign(_currentSteerAngle) * _config.MaxLeanAngle * t;
+                _currentLeanAngle = Mathf.LerpAngle(_currentLeanAngle, targetLean, smooth);
+            }
+
+            transform.localRotation = Quaternion.Euler(localRot.x, localRot.y, _currentLeanAngle);
+        }
+
+        private void ConstrainRotation(bool onGround)
+        {
+            _rb.constraints = onGround
+                ? RigidbodyConstraints.FreezeRotationZ
+                : RigidbodyConstraints.None;
+        }
+
+        private bool IsOnGround() =>
+            (_frontWheelCollider != null && _frontWheelCollider.isGrounded) ||
+            (_rearWheelCollider  != null && _rearWheelCollider.isGrounded);
+
+        // ── Setup ─────────────────────────────────────────────────────────────
+
+        private void SetupWheels()
+        {
+            if (_frontWheelCollider) _frontWheelCollider.ConfigureVehicleSubsteps(5, 12, 15);
+            if (_rearWheelCollider)  _rearWheelCollider.ConfigureVehicleSubsteps(5, 12, 15);
         }
 
         private void SetupCenterOfMass()
         {
             if (_frontWheelCollider == null || _rearWheelCollider == null) return;
-            Vector3 com = Vector3.zero;
-            // Midpoint between wheels on Z, slightly below axle height for stability
-            com.z = (_rearWheelCollider.transform.localPosition.z
-                   + _frontWheelCollider.transform.localPosition.z) * 0.5f;
-            com.y = -0.2f;
-            _rb.centerOfMass = com;
+            float midZ = (_rearWheelCollider.transform.localPosition.z + _frontWheelCollider.transform.localPosition.z) * 0.5f;
+            _rb.centerOfMass = new Vector3(
+                _config.CenterOfMassOffset.x,
+                _config.CenterOfMassOffset.y,
+                midZ + _config.CenterOfMassOffset.z);
         }
 
-        // IVehicleRiderSource
+        // ── Visuals ───────────────────────────────────────────────────────────
+
+        private void SyncHandleBar()
+        {
+            if (_handlerBar == null) return;
+            _handlerBar.localRotation = _handleBarInitRot * Quaternion.Euler(0f, _currentSteerAngle, 0f);
+        }
+
+        private static void SyncWheelMesh(WheelCollider col, Transform mesh)
+        {
+            if (col == null || mesh == null) return;
+            col.GetWorldPose(out Vector3 pos, out Quaternion rot);
+            mesh.SetPositionAndRotation(pos, rot);
+        }
+
+        private void UpdateCrankset()
+        {
+            if (_crankset == null) return;
+            float speedFwd = Vector3.Dot(_rb.linearVelocity, transform.forward);
+            float delta    = speedFwd * 3.6f * _config.CranksetDegreesPerKmh * Time.fixedDeltaTime;
+            _crankset.localRotation *= Quaternion.Euler(delta, 0f, 0f);
+            var counter = Quaternion.Euler(-delta, 0f, 0f);
+            if (_leftPedal)  _leftPedal.localRotation  *= counter;
+            if (_rightPedal) _rightPedal.localRotation *= counter;
+        }
+
+        // ── IVehicleRiderSource ───────────────────────────────────────────────
+
         public VehicleRiderData GetRiderData() => new VehicleRiderData
         {
             HideCharacter    = _config.HideCharacter,
@@ -282,30 +293,105 @@ namespace Game.Gameplay.Vehicles.Motorcycle
             StateSource      = this,
         };
 
-        private void UpdateCrankset(float speedFwd)
+        // ── WheelCollider Suspension & Friction Presets ───────────────────────
+        // Right-click the MotorcycleController component header in Inspector to run.
+        // Formulas taken from RayznGames/BicycleSystem/BicycleVehicle.cs.
+
+        [Preserve, ContextMenu("Setup WheelColliders — Motorbike")]
+        private void SetupMotorbike()
         {
-            if (_crankset == null) return;
-
-            // delta in degrees this fixed frame; sign follows drive direction
-            float delta = speedFwd * 3.6f * _config.CranksetDegreesPerKmh * Time.fixedDeltaTime;
-            var spin = Quaternion.Euler(delta, 0f, 0f);
-
-            _crankset.localRotation *= spin;
-
-            // Pedals are children of the crankset; counter-rotate so they stay level.
-            var counterSpin = Quaternion.Euler(-delta, 0f, 0f);
-            if (_leftPedal  != null) _leftPedal.localRotation  *= counterSpin;
-            if (_rightPedal != null) _rightPedal.localRotation *= counterSpin;
+            var rb = GetComponent<Rigidbody>();
+            if (!ValidateSetup(rb)) return;
+            ApplySuspension(_frontWheelCollider, 750f * rb.mass, 32.5f * rb.mass);
+            ApplySuspension(_rearWheelCollider,  350f * rb.mass, 22.5f * rb.mass);
+            // forward: low extremumSlip for early peak, high value for strong traction
+            ApplyFriction(_frontWheelCollider,
+                fwdExSlip: 0.30f, fwdExVal: 1.25f, fwdAsSlip: 0.5f, fwdAsVal: 1.0f,
+                swExSlip:  0.35f, swExVal:  1.56f, swAsSlip:  0.5f, swAsVal:  1.0f);
+            ApplyFriction(_rearWheelCollider,
+                fwdExSlip: 0.15f, fwdExVal: 2.25f, fwdAsSlip: 0.5f, fwdAsVal: 1.0f,
+                swExSlip:  0.30f, swExVal:  2.15f, swAsSlip:  0.5f, swAsVal:  1.0f);
+            Debug.Log("[MotorcycleController] Motorbike suspension & friction applied.", this);
         }
 
-        private static void SyncWheelMesh(WheelCollider col, Transform mesh)
+        [Preserve, ContextMenu("Setup WheelColliders — Bicycle")]
+        private void SetupBicycle()
         {
-            if (col == null || mesh == null) return;
-            col.GetWorldPose(out Vector3 pos, out Quaternion rot);
-            mesh.SetPositionAndRotation(pos, rot);
+            var rb = GetComponent<Rigidbody>();
+            if (!ValidateSetup(rb)) return;
+            ApplySuspension(_frontWheelCollider, 256f * rb.mass, 16.0f * rb.mass);
+            ApplySuspension(_rearWheelCollider,  219f * rb.mass, 11.7f * rb.mass);
+            ApplyFriction(_frontWheelCollider,
+                fwdExSlip: 0.30f, fwdExVal: 1.00f, fwdAsSlip: 0.5f,  fwdAsVal: 1.0f,
+                swExSlip:  0.35f, swExVal:  1.25f, swAsSlip:  0.5f,  swAsVal:  1.0f);
+            ApplyFriction(_rearWheelCollider,
+                fwdExSlip: 0.15f, fwdExVal: 2.50f, fwdAsSlip: 0.6f,  fwdAsVal: 1.75f,
+                swExSlip:  0.30f, swExVal:  2.25f, swAsSlip:  0.6f,  swAsVal:  1.75f);
+            Debug.Log("[MotorcycleController] Bicycle suspension & friction applied.", this);
         }
 
-        // Maps runtime Euler angle [0,360) to signed [-180,180).
+        [Preserve, ContextMenu("Setup WheelColliders — Unity Default")]
+        private void SetupDefault()
+        {
+            var rb = GetComponent<Rigidbody>();
+            if (!ValidateSetup(rb)) return;
+            float spring = 23.33f * rb.mass;
+            float damper = 3.00f  * rb.mass;
+            ApplySuspension(_frontWheelCollider, spring, damper);
+            ApplySuspension(_rearWheelCollider,  spring, damper);
+            ApplyFriction(_frontWheelCollider,
+                fwdExSlip: 0.30f, fwdExVal: 1.25f, fwdAsSlip: 0.5f, fwdAsVal: 1.0f,
+                swExSlip:  0.35f, swExVal:  1.56f, swAsSlip:  0.5f, swAsVal:  1.0f);
+            ApplyFriction(_rearWheelCollider,
+                fwdExSlip: 0.15f, fwdExVal: 2.25f, fwdAsSlip: 0.5f, fwdAsVal: 1.0f,
+                swExSlip:  0.30f, swExVal:  2.15f, swAsSlip:  0.5f, swAsVal:  1.0f);
+            Debug.Log("[MotorcycleController] Default suspension & motorbike friction applied.", this);
+        }
+
+        private bool ValidateSetup(Rigidbody rb)
+        {
+            if (rb == null)
+            {
+                Debug.LogError("[MotorcycleController] Rigidbody not found.", this);
+                return false;
+            }
+            if (_frontWheelCollider == null || _rearWheelCollider == null)
+            {
+                Debug.LogError("[MotorcycleController] WheelColliders not assigned.", this);
+                return false;
+            }
+            return true;
+        }
+
+        private static void ApplySuspension(WheelCollider wheel, float spring, float damper)
+        {
+            var s = wheel.suspensionSpring;
+            s.spring = spring;
+            s.damper = damper;
+            wheel.suspensionSpring = s;
+        }
+
+        private static void ApplyFriction(WheelCollider wheel,
+            float fwdExSlip, float fwdExVal, float fwdAsSlip, float fwdAsVal,
+            float swExSlip,  float swExVal,  float swAsSlip,  float swAsVal)
+        {
+            wheel.forwardFriction  = MakeFriction(fwdExSlip, fwdExVal, fwdAsSlip, fwdAsVal);
+            wheel.sidewaysFriction = MakeFriction(swExSlip,  swExVal,  swAsSlip,  swAsVal);
+        }
+
+        private static WheelFrictionCurve MakeFriction(float exSlip, float exVal, float asSlip, float asVal)
+        {
+            var c = new WheelFrictionCurve
+            {
+                extremumSlip   = exSlip,
+                extremumValue  = exVal,
+                asymptoteSlip  = asSlip,
+                asymptoteValue = asVal,
+                stiffness      = 1f
+            };
+            return c;
+        }
+
         private static float WrapAngle(float angle)
         {
             angle %= 360f;
