@@ -17,7 +17,9 @@ namespace Game.Gameplay.Character
 
         private VehicleRiderData   _riderData;
         private IVehicleRiderState _vehicleState;
-        private bool               _inVehicle;
+        private bool _inVehicle;
+
+        public bool IsInVehicle => _inVehicle;
 
         private float _ikWeight;
         private float _ikWeightTarget;

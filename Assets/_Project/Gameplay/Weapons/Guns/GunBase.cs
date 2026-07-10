@@ -66,7 +66,25 @@ namespace Game.Gameplay.Weapons
         /// <summary>Override to customise projectile pattern (e.g. shotgun pellet spread).</summary>
         protected virtual void Fire()
         {
-            FireRaycast(_gripPoint != null ? _gripPoint.forward : transform.forward, _damage);
+            FireRaycast(GetFireDirection(), _damage);
+        }
+
+        protected Vector3 GetFireDirection()
+        {
+            if (_isAiming)
+            {
+                var cam = Camera.main;
+                if (cam != null)
+                {
+                    // Raycast from screen centre — bullet goes where crosshair points
+                    var ray    = cam.ViewportPointToRay(new Vector3(0.5f, 0.5f, 0f));
+                    var origin = _muzzlePoint != null ? _muzzlePoint.position : transform.position;
+                    return Physics.Raycast(ray, out RaycastHit hit, _range, _hitLayers)
+                        ? (hit.point - origin).normalized
+                        : ray.direction;
+                }
+            }
+            return _gripPoint != null ? _gripPoint.forward : transform.forward;
         }
 
         protected void FireRaycast(Vector3 direction, float damage)

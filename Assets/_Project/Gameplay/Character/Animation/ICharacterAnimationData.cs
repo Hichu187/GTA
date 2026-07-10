@@ -12,5 +12,8 @@ namespace Game.Gameplay.Character.Animation
         bool              IsCrouching       { get; }
         LocomotionStateId LocomotionState   { get; }
         Vector2           MoveInput         { get; }
+        bool              IsArmed           { get; }
+        bool              IsAiming          { get; }
+        int               WeaponType        { get; }
     }
 }

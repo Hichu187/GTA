@@ -5,7 +5,7 @@ using Game.Gameplay.Character.Input;
 
 namespace Game.Gameplay.Character
 {
-    public class CharacterInputAdapter : MonoBehaviour, IInputActionMapProvider, ILookInjectable
+    public class CharacterInputAdapter : MonoBehaviour, IInputActionMapProvider, ILookInjectable, IAimToggleable
     {
         public string ActionMapName => "Character";
 
@@ -22,6 +22,7 @@ namespace Game.Gameplay.Character
         // Weapon input
         private bool  _fireHeld;
         private bool  _aimHeld;
+        private bool  _aimToggleActive; // mobile toggle — persists until tapped again
         private bool  _reloadPending;
         private float _switchDelta;
         private bool  _throwPending;
@@ -43,7 +44,7 @@ namespace Game.Gameplay.Character
             {
                 var cmd = new WeaponCommand(
                     firePressed:   _fireHeld,
-                    aimHeld:       _aimHeld,
+                    aimHeld:       _aimHeld || _aimToggleActive,
                     reloadPressed: _reloadPending,
                     switchDelta:   _switchDelta,
                     throwPressed:  _throwPending);
@@ -54,6 +55,10 @@ namespace Game.Gameplay.Character
 
         // Called by LookDragHandler (mobile) to override the look axis each frame.
         public void InjectLook(Vector2 v) => _look = v;
+
+        // IAimToggleable — called by mobile aim button
+        public void ToggleAim()           => _aimToggleActive = !_aimToggleActive;
+        public bool AimToggleActive       => _aimToggleActive;
 
         public bool ConsumeToggleCamera()
         {

@@ -16,6 +16,9 @@ namespace Game.Gameplay.Character.Animation
         private static readonly int _hashIsGrounded  = Animator.StringToHash("IsGrounded");
         private static readonly int _hashIsCrouching = Animator.StringToHash("IsCrouching");
         private static readonly int _hashJump        = Animator.StringToHash("Jump");
+        private static readonly int _hashIsArmed     = Animator.StringToHash("IsArmed");
+        private static readonly int _hashIsAiming    = Animator.StringToHash("IsAiming");
+        private static readonly int _hashWeaponType  = Animator.StringToHash("WeaponType");
 
         private Animator                _animator;
         private ICharacterAnimationData _source;
@@ -45,6 +48,9 @@ namespace Game.Gameplay.Character.Animation
                 _animator.SetFloat(_hashMoveY,      0f);
                 _animator.SetBool(_hashIsGrounded,  true);
                 _animator.SetBool(_hashIsCrouching, false);
+                _animator.SetBool(_hashIsArmed,     false);
+                _animator.SetBool(_hashIsAiming,    false);
+                _animator.SetInteger(_hashWeaponType, 0);
                 _prevState = LocomotionStateId.Idle;
                 return;
             }
@@ -61,6 +67,9 @@ namespace Game.Gameplay.Character.Animation
             _animator.SetFloat(_hashMoveY,  scaledInput.y,    _inputDampTime, dt);
             _animator.SetBool(_hashIsGrounded,  _source.IsGrounded);
             _animator.SetBool(_hashIsCrouching, _source.IsCrouching);
+            _animator.SetBool(_hashIsArmed,     _source.IsArmed);
+            _animator.SetBool(_hashIsAiming,    _source.IsAiming);
+            _animator.SetInteger(_hashWeaponType, _source.WeaponType);
 
             // Jump trigger fires once on FSM state entry
             var state = _source.LocomotionState;

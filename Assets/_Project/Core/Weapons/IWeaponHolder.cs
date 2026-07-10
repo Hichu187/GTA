@@ -8,6 +8,7 @@ namespace Game.Core.Weapons
         void Tick(WeaponCommand cmd);
         bool PickUp(IWeapon weapon);   // returns false if inventory full
         void Drop();
+        void ClearAll();
         void SwitchTo(int slotIndex);
     }
 }

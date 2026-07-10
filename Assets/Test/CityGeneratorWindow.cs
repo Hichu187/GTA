@@ -2,7 +2,7 @@
 // Editor tool: sinh nhanh 1 khu thành phố demo bằng ProBuilder (building = block vuông đơn giản).
 // YÊU CẦU: package "com.unity.probuilder" đã cài trong project.
 // ĐẶT FILE NÀY TRONG 1 FOLDER TÊN "Editor" (VD: Assets/Editor/CityGeneratorProBuilder.cs)
-
+#if UNITY_EDITOR
 using UnityEngine;
 using UnityEditor;
 using UnityEngine.ProBuilder;
@@ -171,3 +171,4 @@ public class CityGeneratorWindow : EditorWindow
         return mat;
     }
 }
+#endif

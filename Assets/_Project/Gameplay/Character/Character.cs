@@ -51,6 +51,8 @@ namespace Game.Gameplay.Character
         private float       _peakFallSpeed;
         private bool        _wasGrounded;
         private bool        _isDead;
+        private bool        _isArmed;
+        private bool        _isAiming;
         private Rigidbody[] _ragdollBodies;
         private Collider[]  _ragdollColliders;
 
@@ -62,6 +64,9 @@ namespace Game.Gameplay.Character
         public bool              IsCrouching       => _ctx?.CrouchRequested ?? false;
         public LocomotionStateId LocomotionState   => _fsm?.CurrentId ?? LocomotionStateId.Idle;
         public Vector2           MoveInput         => _ctx != null ? _ctx.Command.MoveAxis : Vector2.zero;
+        public bool              IsArmed           => _isArmed;
+        public bool              IsAiming          => _isAiming;
+        public int               WeaponType        => (_weaponHolder?.CurrentWeapon as IWeaponStats)?.WeaponTypeId ?? 0;
 
         // ICharacterStats
         public float Health     => _health;
@@ -162,6 +167,7 @@ namespace Game.Gameplay.Character
             SetRagdollActive(false);
 
             _vehicleRider    = GetComponent<CharacterVehicleRider>() ?? gameObject.AddComponent<CharacterVehicleRider>();
+            if (GetComponent<CharacterWeaponIK>() == null) gameObject.AddComponent<CharacterWeaponIK>();
             _abilitySystem   = gameObject.AddComponent<AbilitySystem>();
             _crouchAbility   = new CrouchAbility();
             _interactAbility = new InteractAbility(_interactionDetector, this);
@@ -239,10 +245,22 @@ namespace Game.Gameplay.Character
 
             _ctx.Command = _inputAdapter.Command;
 
+            // Read weapon input once — WeaponCommand consumes one-shot flags on read
+            var weaponCmd = _inputAdapter.WeaponCommand;
+            _isArmed  = _weaponHolder?.CurrentWeapon != null;
+            _isAiming = weaponCmd.AimHeld; // DEBUG: bỏ _isArmed để test camera
+
+            if (weaponCmd.AimHeld)
+                Debug.Log($"[AimTest] AimHeld=true | isAiming={_isAiming} | mode={_cameraProvider.CurrentMode}");
+
             if (_inputAdapter.ConsumeToggleCamera())
                 _cameraProvider.Toggle();
 
-            _cameraProvider.HandleLook(_ctx.Command.LookAxis);
+            // Aim camera: only in TP mode (FP has no shoulder offset)
+            _cameraProvider.SetAimMode(
+                _isAiming && _cameraProvider.CurrentMode == CharacterCameraProvider.CameraMode.ThirdPerson);
+
+            _cameraProvider.HandleLook(_ctx.Command.LookAxis, _ctx.Command.MoveAxis);
 
             // FP: horizontal look is body rotation; TP: 0 (no-op).
             transform.Rotate(0f, _cameraProvider.ConsumeFPBodyYawDelta(), 0f);
@@ -316,19 +334,30 @@ namespace Game.Gameplay.Character
             if (_controller.enabled)
                 _controller.Move(motion * Time.deltaTime);
 
-            // TP only: rotate body to face camera forward so 8-dir blend tree axes align with input.
+            // TP body rotation:
+            // - Aiming   → snap to camera forward (strafe movement)
+            // - Moving   → rotate toward camera forward (existing behaviour)
             // FP: body already tracks look direction via ConsumeFPBodyYawDelta above.
-            if (_cameraProvider.CurrentMode == CharacterCameraProvider.CameraMode.ThirdPerson
-                && worldMove.magnitude > 0.01f)
+            if (_cameraProvider.CurrentMode == CharacterCameraProvider.CameraMode.ThirdPerson)
             {
-                transform.rotation = Quaternion.Slerp(
-                    transform.rotation,
-                    Quaternion.LookRotation(camForward),
-                    15f * Time.deltaTime);
+                if (_isAiming)
+                {
+                    // Read orbital yaw directly — not Camera.main.forward which creates feedback loop
+                    // (character rotates → camera shifts → camForward changes → character rotates more)
+                    var targetRot = Quaternion.Euler(0f, _cameraProvider.GetAimYaw(), 0f);
+                    transform.rotation = Quaternion.Slerp(transform.rotation, targetRot, 20f * Time.deltaTime);
+                }
+                else if (worldMove.magnitude > 0.01f)
+                {
+                    transform.rotation = Quaternion.Slerp(
+                        transform.rotation,
+                        Quaternion.LookRotation(camForward),
+                        15f * Time.deltaTime);
+                }
             }
 
-            // Weapon tick — WeaponHolder handles its own logic when present
-            _weaponHolder?.Tick(_inputAdapter.WeaponCommand);
+            // Weapon tick — pass the already-read command so one-shot flags aren't double-consumed
+            _weaponHolder?.Tick(weaponCmd);
         }
 
         private void Die()
