@@ -34,9 +34,9 @@ namespace Game.Gameplay.Vehicles.Tank
         [Tooltip("Turret/barrel rotation speed following camera (deg/s).")]
         public float TurretRotSpeed = 90f;
         [Tooltip("Barrel minimum pitch angle (degrees, negative = down).")]
-        public float BarrelPitchMin = -5f;
+        public float BarrelPitchMin = -10f;
         [Tooltip("Barrel maximum pitch angle (degrees, positive = up).")]
-        public float BarrelPitchMax = 30f;
+        public float BarrelPitchMax = 10f;
 
         [Header("Cannon")]
         [Tooltip("Seconds between shots.")]
