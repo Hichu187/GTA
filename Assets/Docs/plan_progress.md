@@ -1,6 +1,6 @@
 # Plan Progress — Possession-Based Multi-Entity Control System
 
-*Cập nhật lần cuối: 2026-07-07 (Phase 8 Track D ✅ — Ability System hoàn thành)*
+*Cập nhật lần cuối: 2026-07-13 (Helicopter ✅ code xong — Phase 9+)*
 
 ---
 
@@ -448,13 +448,39 @@
 
 - [ ] Swim / Dive (có thể cần refactor LocomotionStateMachine sang HFSM)
 - [ ] ClimbLadder / Vault / Prone
-- [ ] Boat / Tank / Helicopter (lặp quy trình Phase 5-6)
+- [ ] Boat (lặp quy trình Phase 5-6)
 - [ ] `GameFlowStateMachine` (Boot → MainMenu → Loading → Gameplay → Paused → GameOver)
 - [ ] Inventory / Equipment (Phase 7 đã làm Damage System + Weapon core)
 - [ ] Photo Mode
 - [ ] Replay System (dựa trên Command struct từ Phase 1)
 - [ ] Accessibility Options
 - [ ] Co-op / Split-screen support
+
+### Helicopter ✅ code xong (2026-07-13)
+
+- [x] `HelicopterController : FlyingVehicleBase, IHelicopterStats` — velocity-override flight (đã có sẵn từ trước), rework toàn bộ vertical control + ground/camera trong phiên này
+- [x] **Ground check**: `IsNearGround()` thêm `_groundMask` (LayerMask) + ray gốc nâng lên 1m tránh tự trúng collider của chính helicopter (đồng bộ pattern với `AirplaneController`); thêm `DistanceToGround` public property
+- [x] **Engine power system** (thay hoàn toàn cho input lên/xuống trực tiếp kiểu Q/E tức thời cũ):
+  - `HelicopterMoveCommand` bỏ `Vertical` + `TakeOff`, thêm `EngineUp` / `EngineDown` (bool, giữ nút)
+  - `HelicopterInputAdapter` bind 2 button held-pattern (giống `SprintHeld` bên Character)
+  - `GameInputActions.inputactions` map `Vehicle_Helicopter`: xoá action `Vertical` + `TakeOff`, thêm `EngineUp` (Q / Gamepad RT) + `EngineDown` (E / Gamepad LT)
+  - `_enginePower` (0-100) ramp qua `EnginePowerRampSpeed` khi giữ nút; giữ nguyên khi thả cả hai
+  - Tự động cất cánh (`BeginFlight()`) khi power vượt `LiftoffThreshold` trên mặt đất — không cần nút TakeOff riêng
+  - Giữ EngineUp (power đủ ngưỡng) → leo cao, giảm dần khi gần `MaxAltitudeAboveGround` (đo từ `DistanceToGround`, tức so với mặt đất, không phải world Y tuyệt đối); giữ EngineDown → hạ; **thả cả hai → hover giữ nguyên độ cao hiện tại** (không tự trôi lên trần / không tự rơi)
+  - Dưới `LiftoffThreshold` + trong phạm vi `LandingHeight` (config, không còn hardcode) → tự động `Land()`
+- [x] **Fix bug gravity khi đáp**: `Land()` trước đó gọi `EndFlight()` (bật gravity) rồi ghi đè `useGravity=false` ngay sau đó → helicopter không bao giờ thực sự rơi, lơ lửng cứng tại `LandingHeight`. Đã bỏ dòng ghi đè, để gravity + collider tự xử lý tiếp đất vật lý (đồng bộ `AirplaneController`)
+- [x] **Fix bug đóng băng kinematic sớm**: gỡ bỏ mọi chỗ tự động bật `isKinematic=true` dựa theo khoảng cách/power trong lúc chơi (từng có ở `OnGroundFixedUpdate` và `OnPossess`) — nguyên nhân khiến helicopter bị đóng băng giữa không trung ngay khi vào vùng `LandingHeight` dù chưa thật sự chạm đất. Giờ `isKinematic` chỉ `true` ở trạng thái ban đầu từ `Awake()`, chuyển `false` vĩnh viễn ngay lần `OnPossess` đầu tiên
+- [x] **Tilt khi bay**: cộng thêm `ClimbTiltAngle` vào pitch — ngóc mũi khi leo, cắm mũi khi hạ, cộng dồn với pitch theo vận tốc ngang có sẵn
+- [x] **Fix auto-yaw fighting khi lùi/xoay tại chỗ**: auto-yaw (tự xoay mũi theo hướng bay) giờ chỉ kích hoạt khi `cmd.Horizontal.y > 0.1` (đang chủ động giữ tiến) — không còn tự xoay 180° khi bay lùi, không can thiệp khi chỉ xoay tại chỗ
+- [x] **A/D chỉ xoay, không strafe**: `Horizontal.x` (A/D) gộp vào yaw input cùng phím mũi tên; `desiredHorizontal` chỉ còn phụ thuộc `Horizontal.y` (W/S)
+- [x] **Camera không follow khi đang xoay tại chỗ**: `HelicopterCameraProvider.HandleLook()` thêm tham số `isManualTurning` — bỏ qua recenter khi người chơi đang chủ động giữ Yaw/A-D, chỉ resume khi hết input xoay
+- [x] `HelicopterConfig` thêm đầy đủ field config qua Inspector: `EnginePowerRampSpeed`, `LiftoffThreshold`, `MaxAltitudeAboveGround`, `CeilingSoftZone`, `LandingHeight`, `ClimbTiltAngle`; xoá field chết `MaxHorizontalSpeedKmh` (chưa từng được dùng ở đâu)
+- [x] Cập nhật Editor tooling: `MobileHUDWizard.cs` (nút mobile Q/E đổi nhãn ENG+/ENG-, xoá nút TakeOff không còn tác dụng), `VehicleSetupWizard.cs` (help text mô tả điều khiển mới)
+- [ ] **[Cần làm trong Unity Editor]**:
+  - [ ] Scene cũ (`Test Scene.unity`) có helicopter lưu giá trị `CeilingAltitude` (field đã xoá) — vào Inspector set lại `MaxAltitudeAboveGround`/`LiftoffThreshold`/`EnginePowerRampSpeed`/`LandingHeight` theo ý muốn (đang về mặc định)
+  - [ ] Gán `_groundMask` trên `HelicopterController` đúng layer mặt đất trong scene (đang mặc định `-1` = mọi layer)
+  - [ ] Chạy lại menu **Game → Mobile HUD → Helicopter** để regenerate `MobileControlsHUD_Helicopter.prefab` (bản cũ còn nút `Btn_TakeOff` chết)
+  - [ ] Playtest: giữ Q trên đất → tự cất cánh khi qua ngưỡng; giữ Q trên không → leo rồi hover khi thả; giữ E → hạ rồi hover khi thả, tiếp tục giữ tới khi chạm đất → đáp mượt bằng gravity; A/D chỉ xoay không trượt ngang; bay lùi không tự xoay thân, chỉ ngóc mũi; camera không bị kéo xoay khi giữ A/D một mình
 
 ---
 
@@ -490,3 +516,5 @@
 | 2026-07-07 | — | Phase 7 code 75%: Weapon System. 6 Core contracts (IDamageable/IWeapon/IWeaponHolder/WeaponCommand...). Game.Gameplay.Weapons asmdef (chỉ depend Game.Core). WeaponBase + WeaponHolder. GunBase (raycast, ammo, reload, aim lerp) → Pistol/Rifle/Shotgun. MeleeBase (SphereCast, light/heavy) → Knife/Bat. ThrowableBase (physics launch, cook, IsConsumed) → Grenade. ConsumableBase → MedKit. WeaponAmmoModule + WeaponNameModule + WeaponPickupInteractable. Character implement IDamageable + hook optional WeaponHolder.Tick(). CharacterInputAdapter thêm WeaponCommand (Fire/Aim/Reload/Switch/Throw). CharacterHUDProvider auto-add weapon HUD. GameInputActions thêm 5 actions Character map. Còn scene setup trong Unity Editor. |
 | 2026-07-07 | — | Phase 8 Track D ✅ HOÀN THÀNH: Ability System. ICharacterAbility (Core) + AbilitySystem + CrouchAbility + InteractAbility + LocomotionLockAbility (Game.Gameplay.Character.Abilities). LocomotionContext thêm CrouchRequested. 4 FSM states cập nhật. CharacterInputAdapter thêm ConsumeCrouch(). Character.cs: xoá LocomotionLocked bool, wire AbilitySystem, SetLocomotionLocked delegate → LocomotionLockAbility. Không sửa PossessionManager/CameraManager/HUDManager/Interactables. |
 | 2026-07-07 | — | Phase 8 Track E code hoàn thành (~90%): Save/Load System. ISaveable (JSON string approach) + PersistentGUID (Core). SaveFile/SaveEntry/SaveService (Game.Systems.Persistence — Register pattern, version-checked JSON file). WorldStateTracker (Game.Services — HashSet<GUID> + ApplyToScene). WeaponRegistry ScriptableObject (typeName→prefab). GunBase.SetAmmo + WeaponHolder.ClearAll + WeaponHolder ISaveable (full restore từ registry). Character ISaveable (health/stamina/position). WeaponPickupInteractable thêm MarkConsumed. GameplayServiceLocator thêm SaveService + WorldStateTracker. Editor tool PersistentGUIDAssigner (MenuItem + CustomEditor Inspector button). asmdef cập nhật: Game.Services thêm Persistence, Game.Gameplay.Weapons + Character thêm Game.Services. Còn scene setup. |
+| 2026-07-13 | — | Fix bug xoay camera FP ngược trục Y so với TP: `CharacterCameraProvider.HandleLook` — nhánh First Person dùng `-lookAxis.y` trong khi Third Person/Aim dùng `+lookAxis.y`; đổi FP sang `+` cho khớp chiều. |
+| 2026-07-13 | — | Helicopter ✅ code xong (rework toàn diện, xem chi tiết ở mục Phase 9+ → Helicopter): ground raycast thêm `_groundMask` + `DistanceToGround`; thay input Vertical/TakeOff bằng engine power system (EngineUp/EngineDown giữ nút, ramp 0-100, tự cất/hạ cánh theo `LiftoffThreshold`, trần bay so với mặt đất `MaxAltitudeAboveGround`, hover khi thả nút thay vì tự trôi lên trần/rơi); thêm tilt theo tốc độ lên/xuống; fix auto-yaw xoay ngược khi bay lùi; A/D đổi thành chỉ xoay (không strafe); camera ngừng follow khi đang xoay tại chỗ; fix bug gravity không bật khi đáp (`Land()` tự ghi đè `useGravity=false`); fix bug đóng băng kinematic sớm giữa không trung tại `LandingHeight`. Cập nhật `GameInputActions.inputactions`, `MobileHUDWizard.cs`, `VehicleSetupWizard.cs` theo input mới. Còn scene setup thủ công (xem checklist). |

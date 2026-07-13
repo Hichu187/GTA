@@ -309,7 +309,8 @@ namespace Game.Editor
             Finish("Helicopter",
                 "Replace RollRoot/MeshRoot with your real fuselage mesh. " +
                 "Assign real rotor meshes to MainRotor / TailRotor. " +
-                "Press Space in-game to TakeOff; press Space again near ground to Land. " +
+                "Hold Q in-game to spool the engine up — crossing LiftoffThreshold takes off automatically; " +
+                "hold E to spool down and it lands automatically near the ground. " +
                 "Place vehicle on Interactable layer.");
         }
 

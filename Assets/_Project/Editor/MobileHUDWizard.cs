@@ -128,7 +128,8 @@ namespace Game.Editor
         }
 
         // ═══════════════════════════════════════════════════════════════════
-        // HELICOPTER — Up/Down left (Q=up E=down), WASD cross right (Horizontal)
+        // HELICOPTER — Engine Up/Down left (Q=spool up, E=spool down; auto
+        // takeoff/land at LiftoffThreshold), WASD cross right (Horizontal)
         // ═══════════════════════════════════════════════════════════════════
 
         [MenuItem("Game/Mobile HUD/Helicopter")]
@@ -137,19 +138,18 @@ namespace Game.Editor
             var prefab = CreatePrefab("MobileControlsHUD_Helicopter", root =>
             {
                 AddLookPad(root);
-                // Q=positive Vertical (up), E=negative Vertical (down)
-                AddForwardBackButtons(root, "<Keyboard>/q", "<Keyboard>/e", "UP", "DOWN");
-                // WASD = Horizontal 2DVector composite
+                // Q=EngineUp (hold to spool up / climb), E=EngineDown (hold to spool down / descend)
+                AddForwardBackButtons(root, "<Keyboard>/q", "<Keyboard>/e", "ENG+", "ENG-");
+                // WASD = Horizontal 2DVector composite (W/S move, A/D now yaw-only)
                 AddDirection4Buttons(root,
                     "<Keyboard>/w", "<Keyboard>/s",
                     "<Keyboard>/a", "<Keyboard>/d",
                     "FWD", "BWD", "LFT", "RGT");
                 AddOtherButtons(root, new[]
                 {
-                    ("YawL",    "<Keyboard>/leftArrow"),
-                    ("YawR",    "<Keyboard>/rightArrow"),
-                    ("TakeOff", "<Keyboard>/space"),
-                    ("Exit",    "<Keyboard>/f"),
+                    ("YawL", "<Keyboard>/leftArrow"),
+                    ("YawR", "<Keyboard>/rightArrow"),
+                    ("Exit", "<Keyboard>/f"),
                 });
             });
             WireTo<HelicopterHUDProvider>(prefab, "_mobileControlsPrefab");

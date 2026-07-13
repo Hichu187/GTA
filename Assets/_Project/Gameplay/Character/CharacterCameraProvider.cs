@@ -92,7 +92,7 @@ namespace Game.Gameplay.Character
 
                 var tAxis = _fpPanTilt.TiltAxis;
                 _fpPanTilt.TiltAxis.Value = Mathf.Clamp(
-                    tAxis.Value - lookAxis.y * _sensitivity,
+                    tAxis.Value + lookAxis.y * _sensitivity,
                     tAxis.Range.x, tAxis.Range.y);
             }
         }

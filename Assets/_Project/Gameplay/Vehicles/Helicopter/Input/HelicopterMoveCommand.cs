@@ -4,18 +4,18 @@ namespace Game.Gameplay.Vehicles.Helicopter
 {
     public readonly struct HelicopterMoveCommand
     {
-        public readonly Vector2 Horizontal; // WASD / left stick — camera-relative XZ movement
-        public readonly float   Vertical;   // Q = +1 (ascend), E = -1 (descend)
-        public readonly float   Yaw;        // A/D = -1..1 — rotate body in air
-        public readonly bool    TakeOff;    // Space — toggle flight
+        public readonly Vector2 Horizontal; // WASD / left stick — camera-relative forward/back (Y), yaw (X)
+        public readonly float   Yaw;        // Arrow keys / shoulders — rotate body in air
+        public readonly bool    EngineUp;   // Q / right trigger — hold to spool engine power up
+        public readonly bool    EngineDown; // E / left trigger — hold to spool engine power down
         public readonly Vector2 Look;       // camera
 
-        public HelicopterMoveCommand(Vector2 horizontal, float vertical, float yaw, bool takeOff, Vector2 look)
+        public HelicopterMoveCommand(Vector2 horizontal, float yaw, bool engineUp, bool engineDown, Vector2 look)
         {
             Horizontal = horizontal;
-            Vertical   = vertical;
             Yaw        = yaw;
-            TakeOff    = takeOff;
+            EngineUp   = engineUp;
+            EngineDown = engineDown;
             Look       = look;
         }
     }

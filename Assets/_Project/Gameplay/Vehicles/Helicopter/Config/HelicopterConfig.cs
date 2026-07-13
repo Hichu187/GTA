@@ -9,8 +9,6 @@ namespace Game.Gameplay.Vehicles.Helicopter
         [Header("Helicopter — Horizontal")]
         [Tooltip("Normal horizontal cruise speed (km/h).")]
         public float NormalHorizontalSpeedKmh  = 108f;  // 30 m/s
-        [Tooltip("Maximum horizontal speed (km/h).")]
-        public float MaxHorizontalSpeedKmh     = 180f;  // 50 m/s
         [Tooltip("Horizontal acceleration (m/s²).")]
         public float HorizontalAcceleration    = 15f;
         [Tooltip("Horizontal deceleration when no input (m/s²).")]
@@ -36,6 +34,20 @@ namespace Game.Gameplay.Vehicles.Helicopter
         [Tooltip("Body tilt Lerp factor.")]
         [Range(0.5f, 20f)]
         public float TiltSmooth                = 3f;
+        [Tooltip("Extra pitch angle (degrees) applied when climbing/descending at max vertical speed.")]
+        public float ClimbTiltAngle            = 8f;
+
+        [Header("Helicopter — Engine")]
+        [Tooltip("Engine power change per second while holding EngineUp/EngineDown (0-100 scale).")]
+        public float EnginePowerRampSpeed      = 40f;
+        [Tooltip("Engine power (0-100) above which the helicopter lifts off / stays airborne. Below it, it descends and lands.")]
+        public float LiftoffThreshold          = 45f;
+        [Tooltip("Maximum height above ground (meters) reachable at full engine power.")]
+        public float MaxAltitudeAboveGround    = 150f;
+        [Tooltip("Distance below the altitude ceiling (meters) over which climb speed eases from max down to 0.")]
+        public float CeilingSoftZone           = 30f;
+        [Tooltip("Height above ground (meters) at which the helicopter is considered landed — below this, engine power under LiftoffThreshold fully cuts the engine and settles it on the ground.")]
+        public float LandingHeight             = 4f;
 
         public HelicopterConfig()
         {

@@ -26,7 +26,10 @@ namespace Game.Gameplay.Vehicles.Helicopter
                 _orbital = _vcamGameObject.GetComponent<CinemachineOrbitalFollow>();
         }
 
-        public void HandleLook(Vector2 look)
+        // isManualTurning: true while the player holds Yaw/A-D input (pure body rotation).
+        // While true, the camera does not recenter behind the nose — it only resumes
+        // once the player stops turning, so spinning in place doesn't drag the camera along.
+        public void HandleLook(Vector2 look, bool isManualTurning = false)
         {
             if (_orbital == null) return;
             bool hasInput = look.sqrMagnitude > 0.01f;
@@ -38,7 +41,7 @@ namespace Game.Gameplay.Vehicles.Helicopter
                     _orbital.VerticalAxis.Value + look.y * _sensitivity,
                     _verticalMin, _verticalMax);
             }
-            else if (Time.time - _lastInputTime >= _returnDelay)
+            else if (!isManualTurning && Time.time - _lastInputTime >= _returnDelay)
             {
                 _orbital.HorizontalAxis.Value = Mathf.LerpAngle(
                     _orbital.HorizontalAxis.Value,
