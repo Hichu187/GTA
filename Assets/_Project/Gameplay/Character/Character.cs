@@ -11,6 +11,8 @@ using Game.Core.Weapons;
 using Game.Gameplay.Character.Abilities;
 using Game.Gameplay.Character.Animation;
 using Game.Gameplay.Character.Locomotion;
+using Game.Gameplay.Character.Water;
+using Game.Gameplay.Character.Ladder;
 using Game.Core;
 using Game.Gameplay.Character.Stats;
 using Game.Services;
@@ -38,7 +40,9 @@ namespace Game.Gameplay.Character
         private LocomotionContext       _ctx;
         private Camera                  _mainCamera;
 
-        private CharacterVehicleRider _vehicleRider;
+        private CharacterVehicleRider   _vehicleRider;
+        private CharacterWaterDetector  _waterDetector;
+        private CharacterLadderDetector _ladderDetector;
         private AbilitySystem         _abilitySystem;
         private CrouchAbility         _crouchAbility;
         private InteractAbility       _interactAbility;
@@ -46,6 +50,7 @@ namespace Game.Gameplay.Character
 
         private float       _health;
         private float       _stamina;
+        private float       _oxygen;
         private bool        _active;
         private Vector3     _launchVelocity;
         private float       _peakFallSpeed;
@@ -53,6 +58,9 @@ namespace Game.Gameplay.Character
         private bool        _isDead;
         private bool        _isArmed;
         private bool        _isAiming;
+        private float       _swimVerticalInput;
+        private bool        _isDrowned;
+        private float       _climbVerticalInput;
         private Rigidbody[] _ragdollBodies;
         private Collider[]  _ragdollColliders;
 
@@ -67,12 +75,18 @@ namespace Game.Gameplay.Character
         public bool              IsArmed           => _isArmed;
         public bool              IsAiming          => _isAiming;
         public int               WeaponType        => (_weaponHolder?.CurrentWeapon as IWeaponStats)?.WeaponTypeId ?? 0;
+        public float             SwimVerticalInput => _swimVerticalInput;
+        public bool              IsDrowned         => _isDrowned;
+        public bool              IsClimbing         => _fsm?.CurrentId == LocomotionStateId.Climb;
+        public float             ClimbVerticalInput => _climbVerticalInput;
 
         // ICharacterStats
         public float Health     => _health;
         public float MaxHealth  => _maxHealth;
         public float Stamina    => _stamina;
         public float MaxStamina => _maxStamina;
+        public float Oxygen     => _oxygen;
+        public float MaxOxygen  => _config.MaxOxygen;
 
         // IDamageable
         public float CurrentHealth => _health;
@@ -80,7 +94,7 @@ namespace Game.Gameplay.Character
         {
             if (_isDead || amount <= 0f) return;
             _health = Mathf.Clamp(_health - amount, 0f, _maxHealth);
-            if (_health <= 0f) Die();
+            if (_health <= 0f) Die(type);
         }
 
         // ISaveable
@@ -147,6 +161,7 @@ namespace Game.Gameplay.Character
 
             _health  = _maxHealth;
             _stamina = _maxStamina;
+            _oxygen  = _config.MaxOxygen;
 
             _ctx = new LocomotionContext
             {
@@ -167,6 +182,8 @@ namespace Game.Gameplay.Character
             SetRagdollActive(false);
 
             _vehicleRider    = GetComponent<CharacterVehicleRider>() ?? gameObject.AddComponent<CharacterVehicleRider>();
+            _waterDetector   = GetComponent<CharacterWaterDetector>() ?? gameObject.AddComponent<CharacterWaterDetector>();
+            _ladderDetector  = GetComponent<CharacterLadderDetector>() ?? gameObject.AddComponent<CharacterLadderDetector>();
             if (GetComponent<CharacterWeaponIK>() == null) gameObject.AddComponent<CharacterWeaponIK>();
             _abilitySystem   = gameObject.AddComponent<AbilitySystem>();
             _crouchAbility   = new CrouchAbility();
@@ -272,6 +289,24 @@ namespace Game.Gameplay.Character
             }
             _ctx.CrouchRequested = _crouchAbility.IsActive;
 
+            _ctx.IsInWater       = _waterDetector.IsInWater;
+            _ctx.SubmersionDepth = _waterDetector.SubmersionDepth;
+            _ctx.WaterSurfaceY   = _waterDetector.SurfaceY;
+
+            if (_ctx.LadderReentryCooldown > 0f)
+            {
+                _ctx.LadderReentryCooldown -= Time.deltaTime;
+                _ctx.IsOnLadder = false; // suppressed — just dismounted, ignore overlap for a moment
+            }
+            else
+            {
+                _ctx.IsOnLadder = _ladderDetector.IsOnLadder;
+            }
+            _ctx.LadderMountPosition = _ladderDetector.MountPosition;
+            _ctx.LadderFacing        = _ladderDetector.ClimbFacing;
+            _ctx.LadderTopY          = _ladderDetector.TopY;
+            _ctx.LadderBottomY       = _ladderDetector.BottomY;
+
             if (_inputAdapter.ConsumeInteract())
             {
                 if (_abilitySystem.IsLocomotionLocked)
@@ -284,6 +319,15 @@ namespace Game.Gameplay.Character
                 _fsm.Tick(_ctx);
             else
                 _ctx.MoveSpeed = 0f;
+
+            // Fold in one-shot outward launches requested by FSM states this tick (e.g.
+            // ClimbState's Jump-bail) into the same decaying exit-launch impulse used for
+            // vehicle ejection, so it carries the character outward instead of just hovering.
+            if (_ctx.PendingLaunchVelocity.sqrMagnitude > 0.0001f)
+            {
+                _launchVelocity += _ctx.PendingLaunchVelocity;
+                _ctx.PendingLaunchVelocity = Vector3.zero;
+            }
 
             // Fall damage — track peak fall speed; apply on landing
             bool grounded = _controller.isGrounded;
@@ -307,16 +351,39 @@ namespace Game.Gameplay.Character
             }
             _wasGrounded = grounded;
 
-            // Camera-relative movement: project camera forward/right onto XZ plane.
-            var camForward = _mainCamera != null
-                ? Vector3.ProjectOnPlane(_mainCamera.transform.forward, Vector3.up).normalized
-                : Vector3.forward;
-            var camRight = _mainCamera != null
-                ? Vector3.ProjectOnPlane(_mainCamera.transform.right, Vector3.up).normalized
-                : Vector3.right;
+            // Oxygen / drowning — drains while diving, regenerates otherwise (swimming or on land).
+            if (_fsm.CurrentId == LocomotionStateId.Dive)
+            {
+                _oxygen = Mathf.Max(0f, _oxygen - _config.OxygenDrainRate * Time.deltaTime);
+                if (_oxygen <= 0f)
+                    TakeDamage(_config.DrownDamagePerSecond * Time.deltaTime, DamageType.Drown);
+            }
+            else
+            {
+                _oxygen = Mathf.Min(_config.MaxOxygen, _oxygen + _config.OxygenRegenRate * Time.deltaTime);
+            }
 
-            var worldMove = camForward * _ctx.Command.MoveAxis.y
-                          + camRight   * _ctx.Command.MoveAxis.x;
+            // Camera-relative movement: flattened to the XZ plane on land so pitch doesn't
+            // affect walking; full 3D while Swim/Dive so swim direction follows exactly
+            // where the camera looks (pitch up/down swims up/down — no button needed to
+            // dive, see SwimState's auto-transition based on held input + depth).
+            bool isWaterborne = _fsm.CurrentId == LocomotionStateId.Swim || _fsm.CurrentId == LocomotionStateId.Dive;
+            bool isClimbing   = _fsm.CurrentId == LocomotionStateId.Climb;
+
+            var camForward = _mainCamera == null ? Vector3.forward
+                : isWaterborne ? _mainCamera.transform.forward
+                : Vector3.ProjectOnPlane(_mainCamera.transform.forward, Vector3.up).normalized;
+            var camRight = _mainCamera == null ? Vector3.right
+                : isWaterborne ? _mainCamera.transform.right
+                : Vector3.ProjectOnPlane(_mainCamera.transform.right, Vector3.up).normalized;
+
+            // Climbing ignores camera-relative input entirely — ClimbState drives pure
+            // vertical movement along the ladder rail via VerticalVelocity instead.
+            var worldMove = isClimbing ? Vector3.zero
+                : camForward * _ctx.Command.MoveAxis.y + camRight * _ctx.Command.MoveAxis.x;
+
+            _swimVerticalInput  = isWaterborne ? Mathf.Clamp(worldMove.y, -1f, 1f) : 0f;
+            _climbVerticalInput = isClimbing   ? Mathf.Clamp(_ctx.Command.MoveAxis.y, -1f, 1f) : 0f;
 
             // Decay exit impulse (15 m/s² deceleration — e.g. 150 km/h tumble stops in ~2.8 s).
             if (_launchVelocity.sqrMagnitude > 0.01f)
@@ -326,21 +393,33 @@ namespace Game.Gameplay.Character
 
             // Slope-stick: when grounded and moving, push down hard enough to follow any walkable slope.
             // -2f alone is insufficient on steep slopes at high speed (45° @ 5 m/s needs -5 m/s down).
-            var slopeStickVertical = _controller.isGrounded && _ctx.MoveSpeed > 0f && _ctx.VerticalVelocity < 0f
-                ? Mathf.Min(_ctx.VerticalVelocity, -_ctx.MoveSpeed)
-                : _ctx.VerticalVelocity;
+            // Swim/Dive/Climb skip this — VerticalVelocity there already means the intended vertical
+            // motion directly (buoyancy assist, 0, or ladder climb speed), not gravity to be clamped.
+            var slopeStickVertical = isWaterborne || isClimbing ? _ctx.VerticalVelocity
+                : _controller.isGrounded && _ctx.MoveSpeed > 0f && _ctx.VerticalVelocity < 0f
+                    ? Mathf.Min(_ctx.VerticalVelocity, -_ctx.MoveSpeed)
+                    : _ctx.VerticalVelocity;
 
-            var motion = worldMove * _ctx.MoveSpeed + Vector3.up * slopeStickVertical + _launchVelocity;
+            // Climbing excludes the exit-launch impulse too — nothing should be able to
+            // yank the character sideways off the ladder rail while climbing.
+            var motion = isClimbing
+                ? Vector3.up * slopeStickVertical
+                : worldMove * _ctx.MoveSpeed + Vector3.up * slopeStickVertical + _launchVelocity;
             if (_controller.enabled)
                 _controller.Move(motion * Time.deltaTime);
 
             // TP body rotation:
+            // - Climbing → snap to the ladder's fixed facing (ignores camera entirely)
             // - Aiming   → snap to camera forward (strafe movement)
             // - Moving   → rotate toward camera forward (existing behaviour)
             // FP: body already tracks look direction via ConsumeFPBodyYawDelta above.
             if (_cameraProvider.CurrentMode == CharacterCameraProvider.CameraMode.ThirdPerson)
             {
-                if (_isAiming)
+                if (isClimbing)
+                {
+                    transform.rotation = Quaternion.LookRotation(_ctx.LadderFacing);
+                }
+                else if (_isAiming)
                 {
                     // Read orbital yaw directly — not Camera.main.forward which creates feedback loop
                     // (character rotates → camera shifts → camForward changes → character rotates more)
@@ -360,16 +439,25 @@ namespace Game.Gameplay.Character
             _weaponHolder?.Tick(weaponCmd);
         }
 
-        private void Die()
+        private void Die(DamageType cause)
         {
             _isDead = true;
             _active = false;
+            _controller.enabled = false;
+
+            if (cause == DamageType.Drown)
+            {
+                // Underwater death — ragdoll physics has no buoyancy and looks wrong
+                // submerged, so freeze in the SwimDrowned pose instead (driven by
+                // ICharacterAnimationData.IsDrowned in CharacterAnimationDriver).
+                _isDrowned = true;
+                Debug.Log("[Character] Drowned");
+                return;
+            }
 
             // Capture velocity before disabling everything
             var deathVelocity = _launchVelocity
                               + Vector3.up * _ctx.VerticalVelocity;
-
-            _controller.enabled = false;
 
             // Animator must be disabled so it stops driving bones —
             // otherwise it fights the ragdoll physics every frame.

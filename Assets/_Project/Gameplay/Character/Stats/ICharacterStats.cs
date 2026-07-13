@@ -6,5 +6,7 @@ namespace Game.Gameplay.Character.Stats
         float MaxHealth { get; }
         float Stamina   { get; }
         float MaxStamina{ get; }
+        float Oxygen    { get; }
+        float MaxOxygen { get; }
     }
 }

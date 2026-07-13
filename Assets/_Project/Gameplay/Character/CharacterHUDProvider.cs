@@ -11,6 +11,7 @@ namespace Game.Gameplay.Character
     {
         [SerializeField] private GameObject _healthBarPrefab;
         [SerializeField] private GameObject _staminaBarPrefab;
+        [SerializeField] private GameObject _oxygenBarPrefab;
         [SerializeField] private GameObject _crosshairPrefab;
 
         [Header("Weapon HUD (auto-used when WeaponHolder is present)")]
@@ -35,6 +36,7 @@ namespace Game.Gameplay.Character
             {
                 new HUDModuleHandle("HealthBar",  _healthBarPrefab,  StatsSource),
                 new HUDModuleHandle("StaminaBar", _staminaBarPrefab, StatsSource),
+                new HUDModuleHandle("OxygenBar",  _oxygenBarPrefab,  StatsSource),
                 new HUDModuleHandle("Crosshair",  _crosshairPrefab,  null),
             };
 

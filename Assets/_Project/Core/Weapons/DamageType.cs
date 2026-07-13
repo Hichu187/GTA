@@ -7,5 +7,6 @@ namespace Game.Core.Weapons
         Explosion,
         Fire,
         Fall,
+        Drown,
     }
 }

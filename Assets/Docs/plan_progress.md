@@ -1,6 +1,6 @@
 # Plan Progress — Possession-Based Multi-Entity Control System
 
-*Cập nhật lần cuối: 2026-07-13 (Helicopter ✅ code xong — Phase 9+)*
+*Cập nhật lần cuối: 2026-07-13 (Swim/Dive 🔄 gameplay xong, đang wire animation — Phase 9+)*
 
 ---
 
@@ -446,7 +446,6 @@
 
 > Các hạng mục này chưa được thiết kế chi tiết. Mỗi mục cần một vòng thiết kế riêng khi bắt đầu.
 
-- [ ] Swim / Dive (có thể cần refactor LocomotionStateMachine sang HFSM)
 - [ ] ClimbLadder / Vault / Prone
 - [ ] Boat (lặp quy trình Phase 5-6)
 - [ ] `GameFlowStateMachine` (Boot → MainMenu → Loading → Gameplay → Paused → GameOver)
@@ -481,6 +480,68 @@
   - [ ] Gán `_groundMask` trên `HelicopterController` đúng layer mặt đất trong scene (đang mặc định `-1` = mọi layer)
   - [ ] Chạy lại menu **Game → Mobile HUD → Helicopter** để regenerate `MobileControlsHUD_Helicopter.prefab` (bản cũ còn nút `Btn_TakeOff` chết)
   - [ ] Playtest: giữ Q trên đất → tự cất cánh khi qua ngưỡng; giữ Q trên không → leo rồi hover khi thả; giữ E → hạ rồi hover khi thả, tiếp tục giữ tới khi chạm đất → đáp mượt bằng gravity; A/D chỉ xoay không trượt ngang; bay lùi không tự xoay thân, chỉ ngóc mũi; camera không bị kéo xoay khi giữ A/D một mình
+
+### Swim / Dive 🔄 gameplay xong + đang wire animation (2026-07-13)
+
+> Plan chi tiết: `C:\Users\PC\.claude\plans\curious-rolling-penguin.md` (đã qua Plan Mode, user duyệt trước khi code).
+> Quyết định kiến trúc: refactor `LocomotionStateMachine` sang **HFSM tối giản** (không giữ flat) vì
+> Prone/Climb/Mounted trong roadmap sẽ cần cùng shape; toggle bật/tắt lặn = 1 field `CanDive` trên
+> `CharacterConfig` (không xây hệ thống settings mới).
+
+- [x] **HFSM refactor** (`Locomotion/`) — 8 leaf state cũ (Idle/Walk/.../Crouch) **không sửa gì**:
+  - `ILocomotionGroup.cs` (interface mới) + `Groups/WaterborneGroup.cs` — group-guard cấp cha chạy
+    trước leaf state mỗi `Tick()`, ép vào `Swim` khi `ctx.IsInWater=true` bất kể state con đang tính
+    gì, đẩy ra `Fall` khi rời nước. Thêm group mới sau này (vd `MountedGroup` cho ladder/zipline) chỉ
+    cần thêm 1 class vào `LocomotionStateMachine._groups`, không đụng `Tick()` hay state cũ
+  - `LocomotionStateId` thêm `Swim`, `Dive`
+  - `LocomotionContext` thêm `IsInWater`/`SubmersionDepth`/`WaterSurfaceY` — ghi mỗi frame từ
+    `Character.Update()`, cùng chỗ với `_ctx.Command`
+- [x] **Water detection** (`Gameplay/Character/Water/` — module mới, project trước đó chưa có bất kỳ
+  trigger-volume nào): `WaterZone.cs` (trigger + layer **"Water"** đã reserve sẵn nhưng chưa ai dùng,
+  expose `SurfaceY`) + `CharacterWaterDetector.cs` (nhận `OnTriggerEnter/Exit` trực tiếp trên
+  `CharacterController`, không cần Rigidbody/polling; tính `SubmersionDepth`; ngập ≥60% capsule mới
+  coi là bơi — lội nước nông vẫn đi bộ)
+- [x] **Di chuyển bơi/lặn theo camera 3D đầy đủ** (không flatten xuống XZ như đi bộ) — nhìn lên/xuống +
+  giữ W bơi đúng theo hướng nhìn, áp dụng cho **cả Swim lẫn Dive** (`isWaterborne` trong
+  `Character.Update()`)
+- [x] **Tự động lặn, không cần bấm nút riêng** (đổi từ thiết kế ban đầu dùng Jump sau khi test thực tế
+  thấy bất tiện): `SwimState` tự chuyển `Dive` khi đang giữ phím di chuyển **và** ngập sâu > 0.15m;
+  buoyancy giảm còn 50% sức (`Config.BuoyancyStrength`) để không lấn át việc chủ động bơi xuống;
+  `DiveState` có grace period 0.25s trước khi được phép tự trồi lại `Swim` (tránh nhấp nháy ở ranh
+  giới mặt nước)
+- [x] **Fix bug buoyancy sai** (phát hiện qua debug log thực tế): công thức cũ đặt gốc/chân nhân vật
+  ngay tại mặt nước+offset thay vì đầu — khiến cả người nổi hẳn trên mặt nước, `IsInWater` nhấp nháy
+  đúng/sai liên tục → state bị đá qua lại Swim↔Fall. Đã sửa theo đúng vị trí đầu (head), dùng
+  `CharacterController.center`/`height` giống công thức trong `CharacterWaterDetector`
+- [x] **Oxygen / Drowning**: `DamageType` thêm `Drown`; `ICharacterStats` thêm `Oxygen`/`MaxOxygen`;
+  tick trong `Character.Update()` cạnh block fall-damage — trừ oxy khi `Dive`, hồi khi Swim/trên cạn,
+  hết oxy vẫn Dive → trừ máu liên tục
+- [x] `OxygenBarModule.cs` (copy khuôn `StaminaBarModule`) — đăng ký vào `CharacterHUDProvider` qua
+  `_oxygenBarPrefab` mới
+- [x] `CharacterConfig` thêm `[Header("Swim")]`: `CanDive`, `SwimSpeed`, `DiveSpeed`,
+  `SwimSurfaceOffset`, `BuoyancyStrength`, `MaxOxygen`, `OxygenDrainRate`, `OxygenRegenRate`,
+  `DrownDamagePerSecond`
+- [x] Kiểm chứng: PossessionManager/CameraManager/HUDManager/InputManager **không sửa**; đã test thực
+  tế trong Play mode (không chỉ đọc code) — bơi/lặn theo camera hoạt động đúng, xác nhận bởi user
+- [x] **Animation wiring (code phía C#)**: `ICharacterAnimationData` thêm `SwimVerticalInput` (-1..1,
+  optional cho blend 3D) + `IsDrowned`; `CharacterAnimationDriver.cs` bơm thêm param Animator
+  `IsSwimming`/`IsDiving`/`MoveZ`/`IsDrowned` mỗi frame (an toàn nếu param chưa tồn tại trong
+  Controller — Unity tự bỏ qua); `Character.Die(DamageType)` tách nhánh: chết vì `Drown` → không
+  ragdoll, set `IsDrowned=true` giữ nguyên Animator (ragdoll không có buoyancy sẽ trôi/lật kỳ dưới
+  nước); các cái chết khác giữ nguyên ragdoll như cũ
+- [ ] **Bug đang mở**: chết đuối vẫn bị ragdoll thay vì giữ pose `SwimDrowned01` — user báo lại đang
+  không đúng như kỳ vọng, **chưa tìm nguyên nhân**, cần điều tra tiếp (nghi vấn: animation clip nào
+  đó trong quá trình chết vẫn kích hoạt cơ chế ragdoll khác, hoặc `TakeDamage` gọi `Die()` qua đường
+  khác chưa được cập nhật theo chữ ký `Die(DamageType)` mới)
+- [x] User đã tự setup Animator Controller: blend tree Swim (2D MoveX/MoveY, khuôn giống
+  `GroundLocomotion`), Up/Down cho Dive, `SwimDrowned01`
+- [ ] **[Còn lại trong Unity Editor]**:
+  - [ ] Tạo GameObject nước test trong scene: `BoxCollider isTrigger` + component `WaterZone`, layer
+    "Water" (nếu chưa có sẵn từ trước)
+  - [ ] Tạo prefab `OxygenBar` (Slider + `OxygenBarModule`), gán vào
+    `CharacterHUDProvider._oxygenBarPrefab`
+  - [ ] Camera underwater (`_underwaterVcam` tuỳ chọn theo khuôn `_aimVcam` có sẵn trong
+    `CharacterCameraProvider`) — chưa làm, để sau
 
 ---
 
@@ -518,3 +579,5 @@
 | 2026-07-07 | — | Phase 8 Track E code hoàn thành (~90%): Save/Load System. ISaveable (JSON string approach) + PersistentGUID (Core). SaveFile/SaveEntry/SaveService (Game.Systems.Persistence — Register pattern, version-checked JSON file). WorldStateTracker (Game.Services — HashSet<GUID> + ApplyToScene). WeaponRegistry ScriptableObject (typeName→prefab). GunBase.SetAmmo + WeaponHolder.ClearAll + WeaponHolder ISaveable (full restore từ registry). Character ISaveable (health/stamina/position). WeaponPickupInteractable thêm MarkConsumed. GameplayServiceLocator thêm SaveService + WorldStateTracker. Editor tool PersistentGUIDAssigner (MenuItem + CustomEditor Inspector button). asmdef cập nhật: Game.Services thêm Persistence, Game.Gameplay.Weapons + Character thêm Game.Services. Còn scene setup. |
 | 2026-07-13 | — | Fix bug xoay camera FP ngược trục Y so với TP: `CharacterCameraProvider.HandleLook` — nhánh First Person dùng `-lookAxis.y` trong khi Third Person/Aim dùng `+lookAxis.y`; đổi FP sang `+` cho khớp chiều. |
 | 2026-07-13 | — | Helicopter ✅ code xong (rework toàn diện, xem chi tiết ở mục Phase 9+ → Helicopter): ground raycast thêm `_groundMask` + `DistanceToGround`; thay input Vertical/TakeOff bằng engine power system (EngineUp/EngineDown giữ nút, ramp 0-100, tự cất/hạ cánh theo `LiftoffThreshold`, trần bay so với mặt đất `MaxAltitudeAboveGround`, hover khi thả nút thay vì tự trôi lên trần/rơi); thêm tilt theo tốc độ lên/xuống; fix auto-yaw xoay ngược khi bay lùi; A/D đổi thành chỉ xoay (không strafe); camera ngừng follow khi đang xoay tại chỗ; fix bug gravity không bật khi đáp (`Land()` tự ghi đè `useGravity=false`); fix bug đóng băng kinematic sớm giữa không trung tại `LandingHeight`. Cập nhật `GameInputActions.inputactions`, `MobileHUDWizard.cs`, `VehicleSetupWizard.cs` theo input mới. Còn scene setup thủ công (xem checklist). |
+| 2026-07-13 | — | Swim/Dive 🔄 code xong Phase 1-4 (research → Plan Mode → user duyệt plan → code, xem chi tiết ở mục Phase 9+ → Swim/Dive): refactor `LocomotionStateMachine` sang HFSM tối giản (group-guard `ILocomotionGroup`/`WaterborneGroup`, 8 leaf state cũ không sửa gì) để nước luôn thắng logic grounded/fall; module `Water/` mới (`WaterZone` + `CharacterWaterDetector`, dùng layer "Water" có sẵn nhưng chưa ai dùng, lần đầu có trigger-volume trong project); `SwimState`/`DiveState` mới; option bật/tắt lặn = field `CanDive` trên `CharacterConfig` (không xây settings system mới); Oxygen stat + `DamageType.Drown` + `OxygenBarModule`. Còn Phase 5 (animation wiring cho clip Swim/Dive có sẵn + camera underwater) và scene setup thủ công (xem checklist). |
+| 2026-07-13 | — | Swim/Dive tiếp: qua debug log thực tế phát hiện + fix 2 bug (buoyancy đặt sai vị trí khiến cả người nổi trên mặt nước gây nhấp nháy Swim↔Fall; DiveState bị bounce ngược Swim ngay lập tức). Đổi thiết kế di chuyển sang camera-relative 3D đầy đủ cho cả Swim lẫn Dive (không chỉ Dive như dự định ban đầu). Theo phản hồi thực tế, bỏ hẳn yêu cầu bấm Jump để lặn — giờ tự động lặn khi giữ phím di chuyển + ngập đủ sâu, buoyancy giảm còn 50% để không lấn át. Bắt đầu wire animation: `CharacterAnimationDriver`/`ICharacterAnimationData` thêm IsSwimming/IsDiving/MoveZ/IsDrowned; `Character.Die(DamageType)` tách nhánh Drown không ragdoll (giữ pose SwimDrowned). User đã tự setup Animator Controller (blend tree Swim, Up/Down, SwimDrowned). Bug đang mở: chết đuối vẫn bị ragdoll thay vì giữ pose — chưa rõ nguyên nhân, cần điều tra tiếp. |
